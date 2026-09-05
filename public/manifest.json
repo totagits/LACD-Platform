@@ -1,0 +1,20 @@
+{
+  "name": "Liberia Agency for Community Development",
+  "short_name": "LACD",
+  "description": "Offline-ready platform for the Liberia Agency for Community Development. Access programmes, documents, and submit offline field reports.",
+  "start_url": "./",
+  "scope": "./",
+  "display": "standalone",
+  "orientation": "portrait-primary",
+  "background_color": "#0d2b1d",
+  "theme_color": "#123f2a",
+  "icons": [
+    {
+      "src": "lacd-logo.jpg",
+      "sizes": "192x192 512x512",
+      "type": "image/jpeg",
+      "purpose": "any maskable"
+    }
+  ],
+  "categories": ["government", "productivity", "utilities"]
+}

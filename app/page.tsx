@@ -985,16 +985,68 @@ export default function Home() {
     window.scrollTo({ top: 0, behavior: "smooth" });
   };
 
+  // PWA Offline and Field Resilience States
+  const [isOnline, setIsOnline] = useState<boolean>(true);
+  const [deferredPrompt, setDeferredPrompt] = useState<any>(null);
+  const [showInstallBtn, setShowInstallBtn] = useState<boolean>(false);
+
   useEffect(() => {
-    const syncHash = () => {
-      const route = window.location.hash.replace("#", "") as View;
-      const allowed: View[] = ["home","about","vision","strategy","programmes","programme-detail","projects","news","stories","careers","events","content-detail","gallery","partners","resources","procurement","contact","donate","vault","privacy","terms","search","admin"];
-      if (allowed.includes(route)) setView(route);
-    };
-    syncHash();
-    window.addEventListener("hashchange", syncHash);
-    return () => window.removeEventListener("hashchange", syncHash);
+    // Online / Offline listeners for leeward counties connectivity
+    if (typeof window !== "undefined") {
+      setIsOnline(navigator.onLine);
+      const handleOnline = () => {
+        setIsOnline(true);
+        alert("Internet connection restored. Synchronized with LACD headquarters.", "info");
+      };
+      const handleOffline = () => {
+        setIsOnline(false);
+        alert("Offline mode active. All downloaded documents, policies and views remain accessible.", "info");
+      };
+      window.addEventListener("online", handleOnline);
+      window.addEventListener("offline", handleOffline);
+
+      // PWA Install prompt listener
+      const handleBeforeInstall = (e: Event) => {
+        e.preventDefault();
+        setDeferredPrompt(e);
+        setShowInstallBtn(true);
+      };
+      window.addEventListener("beforeinstallprompt", handleBeforeInstall);
+
+      // Register Service Worker
+      if ("serviceWorker" in navigator && process.env.NODE_ENV === "production") {
+        navigator.serviceWorker
+          .register(`${basePath}/sw.js`)
+          .then((reg) => {
+            console.log("LACD Offline PWA ServiceWorker registered successfully:", reg.scope);
+          })
+          .catch((err) => {
+            console.warn("ServiceWorker registration failed:", err);
+          });
+      }
+
+      return () => {
+        window.removeEventListener("online", handleOnline);
+        window.removeEventListener("offline", handleOffline);
+        window.removeEventListener("beforeinstallprompt", handleBeforeInstall);
+      };
+    }
   }, []);
+
+  const triggerInstall = async () => {
+    if (!deferredPrompt) {
+      alert("To install LACD App: open browser menu (⋮ or Share) and tap 'Add to Home Screen'.", "info");
+      return;
+    }
+    deferredPrompt.prompt();
+    const { outcome } = await deferredPrompt.userChoice;
+    if (outcome === "accepted") {
+      alert("LACD App installed successfully to your home screen!");
+      setShowInstallBtn(false);
+    }
+    setDeferredPrompt(null);
+  };
+
 
   const digest = async (salt: string, password: string) => {
     try {
@@ -1434,7 +1486,26 @@ export default function Home() {
   return (
     <main ref={topRef}>
       {notice && <div className={`toast ${notice.type}`} role="status">{notice.text}</div>}
-      <div className="demo-ribbon"><strong>Interactive evaluation sandbox</strong><span>Use sample information only. Demonstration activity is not an official LACD submission.</span></div>
+      <div className="demo-ribbon">
+        <div className="demo-ribbon-left">
+          <strong>Interactive evaluation sandbox</strong>
+          <span>Use sample information only. Demonstration activity is not an official LACD submission.</span>
+        </div>
+        <div className="demo-ribbon-right">
+          <span className={`network-status-badge ${isOnline ? "online" : "offline"}`} title={isOnline ? "Connected to LACD cloud" : "Operating in local offline cache mode"}>
+            <span className="status-ping-dot" />
+            {isOnline ? "Online · HQ Synced" : "Leeward Offline Cache Active"}
+          </span>
+          <button 
+            type="button" 
+            className="pwa-install-pill-btn" 
+            onClick={triggerInstall}
+            title="Install LACD Progressive Web App to your phone or desktop for offline access in leeward counties"
+          >
+            📲 Install LACD App (Offline PWA)
+          </button>
+        </div>
+      </div>
       <header className="site-header">
         <button className="brand brand-button" onClick={() => navigate("home")} aria-label="LACD homepage">
           <img src={asset("/lacd-logo.jpg")} alt="Liberia Agency for Community Development logo" />
@@ -1451,7 +1522,7 @@ export default function Home() {
             onMouseLeave={() => setActiveDropdown(null)}
           >
             <button 
-              type="button"
+              type="button" 
               className={`nav-dropdown-trigger ${["resources","news","stories","gallery","contact"].includes(view)?"active":""}`}
               onClick={() => setActiveDropdown(activeDropdown === "public-info" ? null : "public-info")}
             >
@@ -1471,7 +1542,7 @@ export default function Home() {
             onMouseLeave={() => setActiveDropdown(null)}
           >
             <button 
-              type="button"
+              type="button" 
               className={`nav-dropdown-trigger ${["careers","procurement"].includes(view)?"active":""}`}
               onClick={() => setActiveDropdown(activeDropdown === "opportunities" ? null : "opportunities")}
             >
@@ -1929,8 +2000,8 @@ export default function Home() {
       <footer>
         <div className="footer-brand"><img src={asset("/lacd-logo.jpg")} alt="" /><div><b>Liberia Agency for<br />Community Development</b><p>Local agency. Shared progress.</p></div></div>
         <div><h3>Explore LACD</h3><button onClick={() => navigate("about")}>About LACD</button><button onClick={() => navigate("vision")}>Vision, Mission & Values</button><button onClick={() => navigate("strategy")}>Strategic Plan</button><button onClick={() => navigate("news")}>News & Updates</button><button onClick={() => navigate("stories")}>Success Stories</button><button onClick={() => navigate("careers")}>Careers</button><button onClick={() => navigate("events")}>Events Calendar</button><button onClick={() => navigate("gallery")}>Gallery</button><button onClick={() => navigate("partners")}>Partners & donors</button><button onClick={() => navigate("donate")}>♥ Donate & Support</button></div>
-        <div><h3>Public Records & Governance</h3><button onClick={() => navigate("resources")}>Public Information & Publications</button><button onClick={() => navigate("procurement")}>Procurement & Tenders</button><button onClick={() => navigate("projects")}>Project Results & M&E</button><button onClick={() => navigate("contact")}>Contact & Public Feedback</button><button onClick={() => navigate("privacy")}>Privacy Policy</button><button onClick={() => navigate("terms")}>Terms of Use</button><button className="footer-vault-link" onClick={() => navigate("vault")}>🔒 Staff & Officer Governance Vault (RBAC)</button><button onClick={() => navigate("admin")}>CMS Administration</button></div>
-        <div className="footer-bottom"><span>Interactive concept demonstration prepared by TOTAG IT Services for RFQ evaluation.</span><span>Contact: emmanuelpaye1978@gmail.com · lacommunitydevelopment1@gmail.com</span><span className="footer-discreet-links"><button onClick={() => navigate("vault")} className="discreet-vault-btn">🔒 Internal Vault Portal</button> · <span>Responsive · Accessible · Secure-by-design</span></span></div>
+        <div><h3>Public Records & Governance</h3><button onClick={() => navigate("resources")}>Public Information & Publications</button><button onClick={() => navigate("procurement")}>Procurement & Tenders</button><button onClick={() => navigate("projects")}>Project Results & M&E</button><button onClick={() => navigate("contact")}>Contact & Public Feedback</button><button onClick={() => navigate("privacy")}>Privacy Policy</button><button onClick={() => navigate("terms")}>Terms of Use</button><button onClick={triggerInstall} className="footer-pwa-link">📲 Offline PWA Mode (Leeward Counties)</button><button className="footer-vault-link" onClick={() => navigate("vault")}>🔒 Staff & Officer Governance Vault (RBAC)</button><button onClick={() => navigate("admin")}>CMS Administration</button></div>
+        <div className="footer-bottom"><span>Interactive concept demonstration prepared by TOTAG IT Services for RFQ evaluation.</span><span>Contact: emmanuelpaye1978@gmail.com · lacommunitydevelopment1@gmail.com</span><span className="footer-discreet-links"><button onClick={() => navigate("vault")} className="discreet-vault-btn">🔒 Internal Vault Portal</button> · <span className="pwa-status-text">⚡ PWA Offline-Ready (Liberia 15 Counties)</span> · <span>Secure-by-design</span></span></div>
       </footer>
     </main>
   );

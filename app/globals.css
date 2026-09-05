@@ -2385,3 +2385,105 @@ body{background:radial-gradient(circle at 10% 5%,#dcebcbaa 0,transparent 31%),ra
     gap: 12px;
   }
 }
+
+/* PWA Offline and Leeward Connectivity System */
+.demo-ribbon {
+  display: flex !important;
+  justify-content: space-between !important;
+  align-items: center !important;
+  flex-wrap: wrap !important;
+  gap: 12px !important;
+}
+.demo-ribbon-left {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  flex-wrap: wrap;
+}
+.demo-ribbon-right {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+.network-status-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 3px 10px;
+  border-radius: 999px;
+  font-size: 10.5px;
+  font-weight: 800;
+  letter-spacing: 0.02em;
+  transition: all 0.2s ease;
+}
+.network-status-badge.online {
+  background: #d4edd9;
+  color: #155724;
+  border: 1px solid #b8dfbf;
+}
+.network-status-badge.offline {
+  background: #fde8e8;
+  color: #9b1c1c;
+  border: 1px solid #f8b4b4;
+  animation: pulseOffline 1.8s infinite;
+}
+@keyframes pulseOffline {
+  0%, 100% { opacity: 1; }
+  50% { opacity: 0.7; }
+}
+.status-ping-dot {
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  background: currentColor;
+}
+.network-status-badge.online .status-ping-dot {
+  background: #28a745;
+  box-shadow: 0 0 6px #28a745;
+}
+.network-status-badge.offline .status-ping-dot {
+  background: #e02424;
+  box-shadow: 0 0 6px #e02424;
+}
+
+.pwa-install-pill-btn {
+  background: #123f2a !important;
+  color: #ffffff !important;
+  border: 0 !important;
+  padding: 4px 12px !important;
+  border-radius: 999px !important;
+  font-size: 11px !important;
+  font-weight: 800 !important;
+  cursor: pointer !important;
+  transition: all 0.2s ease !important;
+  box-shadow: 0 2px 8px rgba(18, 63, 42, 0.25);
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+}
+.pwa-install-pill-btn:hover {
+  background: #1e5a3c !important;
+  transform: translateY(-1px);
+  box-shadow: 0 4px 12px rgba(18, 63, 42, 0.35);
+}
+
+.footer-pwa-link {
+  color: #aecd91 !important;
+  font-weight: 700;
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  opacity: 0.95;
+  transition: all 0.2s ease;
+  cursor: pointer;
+}
+.footer-pwa-link:hover {
+  color: #ffffff !important;
+  text-decoration: underline;
+  transform: translateX(2px);
+}
+.pwa-status-text {
+  color: #aecd91;
+  font-weight: 700;
+}
+
