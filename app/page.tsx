@@ -3,7 +3,7 @@
 import { FormEvent, useEffect, useMemo, useRef, useState } from "react";
 import { jsPDF } from "jspdf";
 
-type View = "home" | "about" | "vision" | "strategy" | "programmes" | "programme-detail" | "projects" | "news" | "stories" | "careers" | "events" | "content-detail" | "gallery" | "partners" | "resources" | "procurement" | "contact" | "privacy" | "terms" | "search" | "admin";
+type View = "home" | "about" | "vision" | "strategy" | "programmes" | "programme-detail" | "projects" | "news" | "stories" | "careers" | "events" | "content-detail" | "gallery" | "partners" | "resources" | "procurement" | "contact" | "donate" | "privacy" | "terms" | "search" | "admin";
 type Notice = { type: "success" | "info"; text: string } | null;
 type Resource = { id: number; type: string; year: string; title: string; summary: string };
 type StoredFile = { key: string; name: string; type: string; size: number; scanStatus: string };
@@ -282,6 +282,9 @@ export default function Home() {
   const persistenceReady = useRef(false);
   const persistenceTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
 
+  const [carouselPaused, setCarouselPaused] = useState(false);
+  const [carouselProgress, setCarouselProgress] = useState(0);
+
   const alert = (text: string, type: "success" | "info" = "success") => {
     setNotice({ text, type });
     window.setTimeout(() => setNotice(null), 4200);
@@ -296,7 +299,7 @@ export default function Home() {
   useEffect(() => {
     const syncHash = () => {
       const route = window.location.hash.replace("#", "") as View;
-      const allowed: View[] = ["home","about","vision","strategy","programmes","programme-detail","projects","news","stories","careers","events","content-detail","gallery","partners","resources","procurement","contact","privacy","terms","search","admin"];
+      const allowed: View[] = ["home","about","vision","strategy","programmes","programme-detail","projects","news","stories","careers","events","content-detail","gallery","partners","resources","procurement","contact","donate","privacy","terms","search","admin"];
       if (allowed.includes(route)) setView(route);
     };
     syncHash();
@@ -405,9 +408,25 @@ export default function Home() {
 
   useEffect(() => {
     if (view !== "home") return;
-    const timer = window.setInterval(() => setCarouselIndex(i => (i + 1) % carouselActivities.length), 7000);
+    if (carouselPaused) return;
+    const intervalMs = 100;
+    const totalMs = 6000;
+    const step = (intervalMs / totalMs) * 100;
+    const timer = window.setInterval(() => {
+      setCarouselProgress((prev) => {
+        if (prev >= 100) {
+          setCarouselIndex((i) => (i + 1) % carouselActivities.length);
+          return 0;
+        }
+        return prev + step;
+      });
+    }, intervalMs);
     return () => window.clearInterval(timer);
-  }, [view,carouselActivities.length]);
+  }, [view, carouselPaused, carouselActivities.length]);
+
+  useEffect(() => {
+    setCarouselProgress(0);
+  }, [carouselIndex]);
 
   useEffect(() => { if (loggedIn) setTenderSelected(false); }, [loggedIn]);
 
@@ -438,6 +457,7 @@ export default function Home() {
       { title: "About LACD", type: "Institution", summary: "History, legal identity, governance, mandate, presence and approach.", view: "about" as View },
       { title: "Vision, Mission and Core Values", type: "Institution", summary: "The institutional commitments guiding LACD.", view: "vision" as View },
       { title: "LACD Strategic Plan", type: "Strategy", summary: "Priorities, objectives, pillars, implementation period and results framework.", view: "strategy" as View },
+      { title: "Donate & Support Our Work", type: "Support", summary: "Support community development in Liberia through Mobile Money and wire transfers.", view: "donate" as View },
       ...programmes.map((p) => ({ title: p.title, type: "Programme", summary: p.text, view: "programmes" as View })),
       ...projects.map((p) => ({ title: p.title, type: "Project", summary: `${p.county} County - ${p.people}`, view: "projects" as View })),
       ...contentItems.filter(p=>!p.cmsStatus||p.cmsStatus==="Published").map((p) => ({ title: p.title, type: p.type, summary: p.summary, view: (p.type === "News" ? "news" : p.type === "Success Story" ? "stories" : p.type === "Vacancy" ? "careers" : "events") as View })),
@@ -637,10 +657,11 @@ export default function Home() {
           <button onClick={() => navigate("resources")}>Public information</button>
           <button onClick={() => navigate("procurement")}>Procurement</button>
           <button onClick={() => navigate("contact")}>Contact</button>
+          <button className={`nav-donate-pill ${view==="donate"?"active":""}`} onClick={() => navigate("donate")}>♥ Donate</button>
         </nav>
         <form className="header-search" onSubmit={(e) => { e.preventDefault(); if (siteQuery.trim()) navigate("search"); }}><label><span className="sr-only">Search the LACD website</span><input value={siteQuery} onChange={(e) => setSiteQuery(e.target.value)} placeholder="Search" /></label><button aria-label="Search">⌕</button></form>
         <button className="nav-cta" onClick={() => staffLoggedIn ? navigate("admin") : setLoginOpen(true)}>{staffLoggedIn ? "Dashboard" : "Staff sign in"}</button>
-        <details className="mobile-menu"><summary>Menu</summary><div>{[{v:"home",t:"Home"},{v:"about",t:"About LACD"},{v:"vision",t:"Vision & mission"},{v:"strategy",t:"Strategic Plan"},{v:"programmes",t:"Programmes"},{v:"projects",t:"Projects"},{v:"news",t:"News & stories"},{v:"careers",t:"Careers"},{v:"events",t:"Events"},{v:"gallery",t:"Gallery"},{v:"resources",t:"Public information"},{v:"procurement",t:"Procurement"},{v:"contact",t:"Contact"}].map(x=><button key={x.v} onClick={()=>navigate(x.v as View)}>{x.t}</button>)}</div></details>
+        <details className="mobile-menu"><summary>Menu</summary><div>{[{v:"home",t:"Home"},{v:"about",t:"About LACD"},{v:"vision",t:"Vision & mission"},{v:"strategy",t:"Strategic Plan"},{v:"programmes",t:"Programmes"},{v:"projects",t:"Projects"},{v:"donate",t:"♥ Donate / Support"},{v:"news",t:"News & stories"},{v:"careers",t:"Careers"},{v:"events",t:"Events"},{v:"gallery",t:"Gallery"},{v:"resources",t:"Public information"},{v:"procurement",t:"Procurement"},{v:"contact",t:"Contact"}].map(x=><button key={x.v} onClick={()=>navigate(x.v as View)}>{x.t}</button>)}</div></details>
       </header>
       {loginOpen && <div className="login-overlay" role="dialog" aria-modal="true" aria-label="LACD staff sign in"><form className="login-card" onSubmit={e=>{e.preventDefault();setStaffLoggedIn(true);setLoginOpen(false);setAdminPanel(rolePanels[staffRole][0]);navigate("admin");alert(`Signed in as ${staffRole}. Your dashboard shows only authorized tools.`)}}><button type="button" className="login-close" onClick={()=>setLoginOpen(false)}>Close ×</button><img src={asset("/lacd-logo.jpg")} alt="LACD" /><p className="eyebrow">Secure staff portal demonstration</p><h2>Sign in to your workspace</h2><label>Demo role<select value={staffRole} onChange={e=>setStaffRole(e.target.value as StaffRole)}><option>Administrator</option><option>Content Editor</option><option>Programme Author</option><option>Procurement Publisher</option><option>Analytics Viewer</option></select></label><label>Email address<input required type="email" defaultValue="admin@lacd.demo" /></label><label>Password<input required type="password" defaultValue="Demo@2026" /></label><button className="button primary">Sign in and open dashboard →</button><small>Evaluator sandbox: select any role to inspect its role-based access. Production authentication will use LACD-approved identity controls.</small></form></div>}
 
@@ -653,13 +674,48 @@ export default function Home() {
             <div className="hero-actions">
               <button className="button primary" onClick={() => navigate("programmes")}>Explore our programmes <span>→</span></button>
               <button className="button secondary" onClick={() => navigate("stories")}>See community results</button>
+              <button className="button glass-gold" onClick={() => navigate("donate")}>♥ Support Our Work</button>
             </div>
-            <div className="trust-row"><span><b>Since 2012</b> locally rooted</span><span><b>15 counties</b> national ambition</span><span><b>6 programme areas</b> integrated action</span><span><b>Transparent</b> results and learning</span></div>
+            <div className="trust-row"><span><b>Since 2013</b> locally rooted</span><span><b>15 counties</b> national ambition</span><span><b>6 programme areas</b> integrated action</span><span><b>Transparent</b> results and learning</span></div>
           </div>
-          <div className="activity-carousel" aria-label="LACD Facebook activity carousel">
-            <div className="carousel-frame"><img key={carouselActivities[carouselIndex].image} src={asset(carouselActivities[carouselIndex].image)} alt={carouselActivities[carouselIndex].title} /></div>
-            <div className="carousel-caption"><span>LACD activity showcase · demonstration image</span><h2>{carouselActivities[carouselIndex].title}</h2><p>{carouselActivities[carouselIndex].caption}</p><a href={carouselActivities[carouselIndex].url} target="_blank" rel="noreferrer">View referenced LACD Facebook post ↗</a></div>
-            <button className="carousel-prev" aria-label="Previous activity" onClick={()=>setCarouselIndex(i=>(i-1+carouselActivities.length)%carouselActivities.length)}>←</button><button className="carousel-next" aria-label="Next activity" onClick={()=>setCarouselIndex(i=>(i+1)%carouselActivities.length)}>→</button><div className="carousel-dots">{carouselActivities.map((x,i)=><button aria-label={`Show ${x.title}`} className={i===carouselIndex?"active":""} key={`${x.url}-${i}`} onClick={()=>setCarouselIndex(i)} />)}</div>
+          <div 
+            className="activity-carousel glass-carousel" 
+            aria-label="LACD Facebook activity carousel"
+            onMouseEnter={() => setCarouselPaused(true)}
+            onMouseLeave={() => setCarouselPaused(false)}
+          >
+            <div className="carousel-progress-track">
+              <div className="carousel-progress-bar" style={{ width: `${carouselProgress}%` }} />
+            </div>
+            <div className="carousel-frame">
+              <img key={carouselActivities[carouselIndex].image} src={asset(carouselActivities[carouselIndex].image)} alt={carouselActivities[carouselIndex].title} />
+              <div className="carousel-glass-badge">
+                <span className="live-dot" />
+                <span>Active Showcase · {carouselIndex + 1} / {carouselActivities.length}</span>
+                {carouselPaused && <span className="paused-pill">Paused</span>}
+              </div>
+            </div>
+            <div className="carousel-caption glass-caption">
+              <span className="caption-tag">LACD Field Activity Showcase</span>
+              <h2>{carouselActivities[carouselIndex].title}</h2>
+              <p>{carouselActivities[carouselIndex].caption}</p>
+              <div className="caption-actions">
+                <a href={carouselActivities[carouselIndex].url} target="_blank" rel="noreferrer" className="caption-link">View official post ↗</a>
+                <span className="caption-hint">Hover to pause · Autoplays</span>
+              </div>
+            </div>
+            <button className="carousel-prev glass-nav-btn" aria-label="Previous activity" onClick={()=>setCarouselIndex(i=>(i-1+carouselActivities.length)%carouselActivities.length)}>‹</button>
+            <button className="carousel-next glass-nav-btn" aria-label="Next activity" onClick={()=>setCarouselIndex(i=>(i+1)%carouselActivities.length)}>›</button>
+            <div className="carousel-dots glass-dots">
+              {carouselActivities.map((x,i)=>(
+                <button 
+                  aria-label={`Show ${x.title}`} 
+                  className={i===carouselIndex?"active":""} 
+                  key={`${x.url}-${i}`} 
+                  onClick={()=>{ setCarouselIndex(i); setCarouselProgress(0); }} 
+                />
+              ))}
+            </div>
           </div>
         </section>
         <section className="quick-links">
@@ -679,7 +735,7 @@ export default function Home() {
       </>}
 
       {view === "about" && <Page title="About LACD" eyebrow="Our institution" intro="History, legal identity, leadership and governance, mandate, geographic presence and community-development approach.">
-        <div className="about-layout"><article className="about-narrative"><h2>Rooted in Liberia’s communities.</h2><p className="lead">The Liberia Agency for Community Development is a legally registered, local, non-governmental, non-political and community-driven organization established in 2012.</p><p>LACD was formed to help communities address poverty, weak livelihood systems, food insecurity, climate vulnerability and unequal access to opportunity through locally owned solutions and accountable partnerships.</p><button className="button secondary" onClick={() => downloadDemo("LACD Institutional Profile", "Organizational history, legal identity, governance, mandate, geographic presence and development approach.")}>Download institutional profile</button></article><aside className="identity-card"><span>Established</span><b>2012</b><span>Legal identity</span><b>Registered Liberian NGO</b><span>Institutional character</span><b>Non-political · Community-driven</b></aside></div>
+        <div className="about-layout"><article className="about-narrative"><h2>Rooted in Liberia’s communities.</h2><p className="lead">The Liberia Agency for Community Development is a legally registered, local, non-governmental, non-political and community-driven organization established in 2013.</p><p>LACD was formed to help communities address poverty, weak livelihood systems, food insecurity, climate vulnerability and unequal access to opportunity through locally owned solutions and accountable partnerships.</p><button className="button secondary" onClick={() => downloadDemo("LACD Institutional Profile", "Organizational history, legal identity, governance, mandate, geographic presence and development approach.")}>Download institutional profile</button></article><aside className="identity-card"><span>Established</span><b>2013</b><span>Legal identity</span><b>Registered Liberian NGO</b><span>Institutional character</span><b>Non-political · Community-driven</b></aside></div>
         <div className="institution-facts"><article><span>Institutional mandate</span><h3>Advance inclusive community development</h3><p>Mobilize knowledge, partnerships and resources for sustainable livelihoods, stronger local systems and measurable improvements in wellbeing.</p></article><article><span>Leadership & governance</span><h3>Board oversight and executive management</h3><p>A governing board provides strategic and fiduciary oversight; executive leadership manages programmes, operations, accountability and partnerships. Approved names and profiles are CMS-managed.</p></article><article><span>Geographic presence</span><h3>National ambition, locally grounded delivery</h3><p>Headquartered in Monrovia with programme reach and partnerships designed for communities across Liberia’s 15 counties.</p></article><article><span>Development approach</span><h3>Participatory, evidence-led and sustainable</h3><p>Community consultation, safeguarding, inclusion, local capacity, transparent monitoring and adaptive learning guide the programme cycle.</p></article></div>
       </Page>}
 
@@ -767,8 +823,10 @@ export default function Home() {
       </Page>}
 
       {view === "contact" && <Page title="Contact, feedback and safeguarding" eyebrow="Talk with LACD" intro="Use the appropriate channel for general enquiries, programme feedback, partnership requests or confidential safeguarding concerns.">
-        <div className="contact-grid"><article className="contact-card"><p className="eyebrow">Contact information</p><h2>Let’s connect.</h2><p className="contact-intro">Our team will route your message to the appropriate LACD unit and acknowledge receipt.</p><div className="contact-detail"><span>⌖</span><div><small>Visit our office</small><b>Chugbor Road, Old Road<br/>Monrovia, Liberia</b></div></div><div className="contact-detail"><span>☎</span><div><small>Call us</small><a href="tel:+231777011212">+231 777 011 212</a></div></div><div className="contact-detail"><span>✉</span><div><small>Email us</small><a href="mailto:lacommunitydevelopment1@gmail.com">lacommunitydevelopment1@gmail.com</a></div></div><button className="contact-download" onClick={() => downloadDemo("LACD contact information", "Chugbor Road, Old Road, Monrovia, Liberia")}>Download contact card ↓</button><div className="social-row"><a target="_blank" rel="noreferrer" href="https://www.facebook.com/p/Liberia-Agency-For-Community-Development-100054497019309/">Facebook ↗</a><a target="_blank" rel="noreferrer" href="https://www.linkedin.com/sharing/share-offsite/?url=https%3A%2F%2Flacd-concept-demo.mgwoah.chatgpt.site">LinkedIn ↗</a></div></article><form className="contact-form" onSubmit={(e) => { e.preventDefault(); (e.currentTarget as HTMLFormElement).reset(); alert("Enquiry LACD-DEMO-1048 received. A confirmation has been sent to your email."); }}><div className="form-heading"><p className="eyebrow">Send a message</p><h2>How can LACD help?</h2><p>Fields marked with * are required. Do not include confidential procurement information here—use the bidder clarification workspace.</p></div><label>Enquiry type *<select required><option value="">Select a channel</option><option>General enquiry</option><option>Programme feedback</option><option>Partnership request</option><option>Media enquiry</option><option>Safeguarding concern</option></select></label><label>Full name *<input required placeholder="Your full name" /></label><label>Email address *<input required type="email" placeholder="name@example.com" /></label><label>Phone number<input placeholder="+231 ..." /></label><label className="contact-subject">Subject *<input required placeholder="Briefly describe your enquiry" /></label><label className="contact-message">Message *<textarea required placeholder="Provide the details needed for LACD to respond." /></label><label className="declaration"><input type="checkbox" required /><span>I consent to LACD processing this enquiry in accordance with its Privacy Policy.</span></label><button className="button primary">Send enquiry securely →</button></form></div><div className="map-card"><iframe title="LACD location map" loading="lazy" src="https://www.google.com/maps?q=Chugbor%20Road%2C%20Old%20Road%2C%20Monrovia%2C%20Liberia&output=embed" /><div><p className="eyebrow">Find LACD</p><h2>Chugbor Road, Old Road, Monrovia.</h2><p>Use the interactive map to pan, zoom and open directions. Exact production pin placement will be confirmed by LACD.</p><a href="https://www.google.com/maps/search/Chugbor+Road+Old+Road+Monrovia+Liberia" target="_blank" rel="noreferrer">Open directions in Google Maps →</a></div></div>
+        <div className="contact-grid"><article className="contact-card"><p className="eyebrow">Contact information</p><h2>Let’s connect.</h2><p className="contact-intro">Our team will route your message to the appropriate LACD unit and acknowledge receipt.</p><div className="contact-detail"><span>⌖</span><div><small>Visit our office</small><b>Chugbor Road, Old Road<br/>Monrovia, Liberia</b></div></div><div className="contact-detail"><span>☎</span><div><small>Call us</small><a href="tel:+231777011212">+231 777 011 212</a></div></div><div className="contact-detail"><span>✉</span><div><small>Official emails</small><a href="mailto:lacommunitydevelopment1@gmail.com">lacommunitydevelopment1@gmail.com</a><a href="mailto:emmanuelpaye1978@gmail.com" style={{marginTop:"4px"}}>emmanuelpaye1978@gmail.com</a></div></div><button className="contact-download" onClick={() => downloadDemo("LACD contact information", "Liberia Agency for Community Development\nChugbor Road, Old Road, Monrovia, Liberia\nPhone: +231 777 011 212\nEmails: lacommunitydevelopment1@gmail.com / emmanuelpaye1978@gmail.com")}>Download contact card ↓</button><div className="social-row"><a target="_blank" rel="noreferrer" href="https://www.facebook.com/p/Liberia-Agency-For-Community-Development-100054497019309/">Facebook ↗</a><a target="_blank" rel="noreferrer" href="https://www.linkedin.com/sharing/share-offsite/?url=https%3A%2F%2Flacd-concept-demo.mgwoah.chatgpt.site">LinkedIn ↗</a></div></article><form className="contact-form" onSubmit={(e) => { e.preventDefault(); (e.currentTarget as HTMLFormElement).reset(); alert("Enquiry LACD-DEMO-1048 received. A confirmation has been sent to your email."); }}><div className="form-heading"><p className="eyebrow">Send a message</p><h2>How can LACD help?</h2><p>Fields marked with * are required. You may also contact executive management directly via <b>emmanuelpaye1978@gmail.com</b>.</p></div><label>Enquiry type *<select required><option value="">Select a channel</option><option>General enquiry</option><option>Programme feedback</option><option>Partnership request</option><option>Media enquiry</option><option>Safeguarding concern</option></select></label><label>Full name *<input required placeholder="Your full name" /></label><label>Email address *<input required type="email" placeholder="name@example.com" /></label><label>Phone number<input placeholder="+231 ..." /></label><label className="contact-subject">Subject *<input required placeholder="Briefly describe your enquiry" /></label><label className="contact-message">Message *<textarea required placeholder="Provide the details needed for LACD to respond." /></label><label className="declaration"><input type="checkbox" required /><span>I consent to LACD processing this enquiry in accordance with its Privacy Policy.</span></label><button className="button primary">Send enquiry securely →</button></form></div><div className="map-card"><iframe title="LACD location map" loading="lazy" src="https://www.google.com/maps?q=Chugbor%20Road%2C%20Old%20Road%2C%20Monrovia%2C%20Liberia&output=embed" /><div><p className="eyebrow">Find LACD</p><h2>Chugbor Road, Old Road, Monrovia.</h2><p>Use the interactive map to pan, zoom and open directions. Exact production pin placement will be confirmed by LACD.</p><a href="https://www.google.com/maps/search/Chugbor+Road+Old+Road+Monrovia+Liberia" target="_blank" rel="noreferrer">Open directions in Google Maps →</a></div></div>
       </Page>}
+
+      {view === "donate" && <DonatePage alert={alert} navigate={navigate} />}
 
       {view === "admin" && !staffLoggedIn && <Page title="Staff portal" eyebrow="Authentication required" intro="Sign in to open a role-based dashboard with only the tools assigned to your account."><div className="signin-required"><span>⌾</span><h2>Protected staff workspace</h2><p>The public website remains available without an account. Content, media, user, analytics and maintenance tools require staff authentication.</p><button className="button primary" onClick={()=>setLoginOpen(true)}>Open staff sign in →</button></div></Page>}
 
@@ -795,9 +853,9 @@ export default function Home() {
 
       <footer>
         <div className="footer-brand"><img src={asset("/lacd-logo.jpg")} alt="" /><div><b>Liberia Agency for<br />Community Development</b><p>Local agency. Shared progress.</p></div></div>
-        <div><h3>Explore LACD</h3><button onClick={() => navigate("about")}>About LACD</button><button onClick={() => navigate("vision")}>Vision, Mission & Values</button><button onClick={() => navigate("strategy")}>Strategic Plan</button><button onClick={() => navigate("news")}>News & Updates</button><button onClick={() => navigate("stories")}>Success Stories</button><button onClick={() => navigate("careers")}>Careers</button><button onClick={() => navigate("events")}>Events Calendar</button><button onClick={() => navigate("gallery")}>Gallery</button><button onClick={() => navigate("partners")}>Partners & donors</button></div>
+        <div><h3>Explore LACD</h3><button onClick={() => navigate("about")}>About LACD</button><button onClick={() => navigate("vision")}>Vision, Mission & Values</button><button onClick={() => navigate("strategy")}>Strategic Plan</button><button onClick={() => navigate("news")}>News & Updates</button><button onClick={() => navigate("stories")}>Success Stories</button><button onClick={() => navigate("careers")}>Careers</button><button onClick={() => navigate("events")}>Events Calendar</button><button onClick={() => navigate("gallery")}>Gallery</button><button onClick={() => navigate("partners")}>Partners & donors</button><button onClick={() => navigate("donate")}>♥ Donate & Support</button></div>
         <div><h3>Transparency</h3><button onClick={() => navigate("resources")}>Public information</button><button onClick={() => navigate("procurement")}>Procurement opportunities</button><button onClick={() => navigate("projects")}>Project results</button><button onClick={() => navigate("contact")}>Contact & feedback</button><button onClick={() => navigate("privacy")}>Privacy Policy</button><button onClick={() => navigate("terms")}>Terms of Use</button><button onClick={() => navigate("admin")}>CMS test centre</button></div>
-        <div className="footer-bottom"><span>Interactive concept demonstration prepared by TOTAG IT Services for RFQ evaluation.</span><span>Responsive · Accessible · Secure-by-design</span></div>
+        <div className="footer-bottom"><span>Interactive concept demonstration prepared by TOTAG IT Services for RFQ evaluation.</span><span>Contact: emmanuelpaye1978@gmail.com · lacommunitydevelopment1@gmail.com</span><span>Responsive · Accessible · Secure-by-design</span></div>
       </footer>
     </main>
   );
@@ -855,3 +913,244 @@ function SeoManager({alert}:{alert:(text:string,type?:"success"|"info")=>void}) 
 function AnalyticsDashboard() {return <div className="analytics-grid">{[["12,480","Unique visitors"],["31,206","Page views"],["1,842","Document downloads"],["68%","Mobile devices"],["15","Countries reached"],["4m 12s","Average engagement"]].map(([a,b])=><article key={b}><strong>{a}</strong><span>{b}</span><i /></article>)}<section><h3>Traffic sources</h3>{[["Direct / bookmarked",38],["Search engines",29],["Social media",21],["Partner referrals",12]].map(([x,n])=><div key={String(x)}><span>{x}</span><b>{n}%</b></div>)}</section><section><h3>Most viewed content</h3>{[["Programmes",34],["Procurement opportunities",27],["Success stories",22],["Publications",17]].map(([x,n])=><div key={String(x)}><span>{x}</span><b>{n}%</b></div>)}</section></div>}
 
 function BackupManager({log,setLog,alert}:{log:string[];setLog:React.Dispatch<React.SetStateAction<string[]>>;alert:(text:string,type?:"success"|"info")=>void}) {const [backups,setBackups]=useState([{id:1,date:"Today · 02:00 GMT",type:"Scheduled",status:"Verified"},{id:2,date:"30 Jul 2026 · 02:00 GMT",type:"Scheduled",status:"Verified"},{id:3,date:"28 Jul 2026 · 16:42 GMT",type:"Pre-update",status:"Verified"}]);return <section className="manager-layout"><div className="module-panel"><p className="eyebrow">Security status</p><h2>Protected and maintained</h2>{["SSL certificate active","Daily encrypted backups","Malware and file-integrity monitoring","CMS security updates current","Monthly restore test scheduled"].map(x=><p className="security-line" key={x}><span>✓</span>{x}</p>)}<button className="button primary" onClick={()=>{setBackups(x=>[{id:Date.now(),date:"Just now",type:"Manual",status:"Verified"},...x]);setLog(x=>["Manual backup created and verified",...x]);alert("Backup created and integrity verified.")}}>Create backup now</button></div><div className="record-table"><h2>Restore points & maintenance</h2>{backups.map(b=><article key={b.id}><span className="user-active">{b.status}</span><div><b>{b.date}</b><small>{b.type} backup · encrypted off-site copy</small></div><button onClick={()=>alert(`Restore simulation completed for ${b.date}. No live data was changed.`)}>Test restore</button></article>)}<h3>Maintenance history</h3>{log.slice(0,4).map(x=><p key={x}>{x}</p>)}</div></section>}
+
+function DonatePage({alert, navigate}:{alert:(text:string,type?:"success"|"info")=>void; navigate:(view:View)=>void}) {
+  const [frequency, setFrequency] = useState<"one-time"|"monthly">("one-time");
+  const [amount, setAmount] = useState<number|string>(50);
+  const [customAmount, setCustomAmount] = useState("");
+  const [cause, setCause] = useState("Where Most Needed");
+  const [paymentMethod, setPaymentMethod] = useState<"momo"|"bank"|"card">("momo");
+  const [donorName, setDonorName] = useState("");
+  const [donorEmail, setDonorEmail] = useState("");
+  const [donorPhone, setDonorPhone] = useState("");
+  const [submitted, setSubmitted] = useState(false);
+
+  const tiers = [
+    { value: 25, impact: "Provides climate-resilient vegetable seeds & hand tools for 1 smallholder farmer" },
+    { value: 50, impact: "Funds training and solar-dryer maintenance coaching for a women producer group" },
+    { value: 100, impact: "Supplies emergency food assistance packaging and field logistics for 5 households" },
+    { value: 250, impact: "Supports a community clean-energy or digital-literacy learning site for 1 month" },
+  ];
+
+  const handleSubmit = (e: FormEvent) => {
+    e.preventDefault();
+    const finalAmount = amount === "custom" ? customAmount : amount;
+    if (!finalAmount || Number(finalAmount) <= 0) {
+      return alert("Please specify a valid donation amount.", "info");
+    }
+    setSubmitted(true);
+    alert(`Thank you, ${donorName || "Supporter"}! Your pledge of $${finalAmount} (${frequency}) has been recorded.`);
+  };
+
+  return (
+    <Page 
+      title="Support Community-Led Progress in Liberia" 
+      eyebrow="Donate & Partner" 
+      intro="Your contribution directly powers sustainable agriculture, food security, women and youth livelihoods, clean energy and local community leadership across Liberia’s 15 counties."
+    >
+      <div className="donate-layout">
+        <div className="donate-form-card glass-panel">
+          <div className="donate-header">
+            <div className="donate-badge">Direct Community Impact</div>
+            <h2>Make a Donation</h2>
+            <p>Select an amount or enter a custom gift. 100% of community-designated contributions support direct field implementation.</p>
+          </div>
+
+          <div className="frequency-selector">
+            <button 
+              type="button" 
+              className={frequency === "one-time" ? "active" : ""} 
+              onClick={() => setFrequency("one-time")}
+            >
+              One-time Gift
+            </button>
+            <button 
+              type="button" 
+              className={frequency === "monthly" ? "active" : ""} 
+              onClick={() => setFrequency("monthly")}
+            >
+              Monthly Supporter ✦
+            </button>
+          </div>
+
+          <div className="amount-grid">
+            {tiers.map((t) => (
+              <button
+                key={t.value}
+                type="button"
+                className={`amount-tier ${amount === t.value ? "selected" : ""}`}
+                onClick={() => { setAmount(t.value); setCustomAmount(""); }}
+              >
+                <b>${t.value}</b>
+                <small>{frequency === "monthly" ? "/month" : "USD"}</small>
+              </button>
+            ))}
+            <button
+              type="button"
+              className={`amount-tier custom-tier ${amount === "custom" ? "selected" : ""}`}
+              onClick={() => setAmount("custom")}
+            >
+              <b>Custom</b>
+              <small>Any amount</small>
+            </button>
+          </div>
+
+          {amount === "custom" && (
+            <div className="custom-input-wrap">
+              <span>$</span>
+              <input 
+                type="number" 
+                min="5" 
+                placeholder="Enter custom amount (USD)" 
+                value={customAmount} 
+                onChange={(e) => setCustomAmount(e.target.value)} 
+                required 
+              />
+            </div>
+          )}
+
+          <div className="impact-callout">
+            <span className="impact-icon">🌾</span>
+            <div>
+              <strong>Impact of your gift:</strong>
+              <p>
+                {amount === "custom" 
+                  ? `Every dollar enables LACD's field missions, training and community-owned infrastructure across Liberia.` 
+                  : (tiers.find(t => t.value === amount)?.impact || "Strengthens sustainable local development across Liberia.")}
+              </p>
+            </div>
+          </div>
+
+          <form onSubmit={handleSubmit} className="donate-form">
+            <label>
+              <span>Direct your gift to a programme</span>
+              <select value={cause} onChange={(e) => setCause(e.target.value)}>
+                <option>Where Most Needed (Greatest Flexibility)</option>
+                <option>Food Security & Agriculture</option>
+                <option>Climate Adaptation & Clean Energy</option>
+                <option>Women & Youth Enterprise</option>
+                <option>Health, Nutrition & Community Wellbeing</option>
+                <option>Education & Digital Inclusion</option>
+              </select>
+            </label>
+
+            <div className="form-row-2">
+              <label>
+                <span>Full Name *</span>
+                <input required placeholder="Your full name" value={donorName} onChange={(e) => setDonorName(e.target.value)} />
+              </label>
+              <label>
+                <span>Email Address *</span>
+                <input required type="email" placeholder="name@example.com" value={donorEmail} onChange={(e) => setDonorEmail(e.target.value)} />
+              </label>
+            </div>
+
+            <div className="payment-tabs">
+              <span className="payment-label">Choose payment method:</span>
+              <div className="payment-method-switch">
+                <button type="button" className={paymentMethod === "momo" ? "active" : ""} onClick={() => setPaymentMethod("momo")}>
+                  📱 Mobile Money (Liberia)
+                </button>
+                <button type="button" className={paymentMethod === "bank" ? "active" : ""} onClick={() => setPaymentMethod("bank")}>
+                  🏦 Bank Wire Transfer
+                </button>
+                <button type="button" className={paymentMethod === "card" ? "active" : ""} onClick={() => setPaymentMethod("card")}>
+                  💳 Card / International
+                </button>
+              </div>
+            </div>
+
+            {paymentMethod === "momo" && (
+              <div className="payment-instructions momo-box">
+                <h4>Liberia Mobile Money Channels</h4>
+                <div className="momo-channels">
+                  <div className="channel mtn">
+                    <span className="carrier-badge mtn-badge">MTN MoMo</span>
+                    <p><b>Merchant / Mobile:</b> +231 777 011 212</p>
+                    <small>Name: Liberia Agency for Community Development</small>
+                  </div>
+                  <div className="channel orange">
+                    <span className="carrier-badge orange-badge">Orange Money</span>
+                    <p><b>Mobile Number:</b> +231 777 011 212</p>
+                    <small>Reference: LACD - {donorName ? donorName.replace(/\s+/g, '') : "DONATION"}</small>
+                  </div>
+                </div>
+                <p className="momo-help">After sending via your phone's USSD menu, click below to confirm your pledge reference for official LACD receipting.</p>
+              </div>
+            )}
+
+            {paymentMethod === "bank" && (
+              <div className="payment-instructions bank-box">
+                <h4>Official Banking Details</h4>
+                <div className="bank-details-grid">
+                  <div><span>Account Name</span><b>Liberia Agency for Community Development</b></div>
+                  <div><span>Bank Name</span><b>United Bank for Africa (UBA) / EcoBank Liberia</b></div>
+                  <div><span>USD Account</span><b>012-345-6789-01 (Demonstration)</b></div>
+                  <div><span>SWIFT / BIC</span><b>UBALLRMXXX (Monrovia Head Office)</b></div>
+                  <div><span>Address</span><b>Chugbor Road, Old Road, Monrovia, Liberia</b></div>
+                  <div><span>Reference</span><b>LACD-PLEDGE-{Date.now().toString().slice(-4)}</b></div>
+                </div>
+              </div>
+            )}
+
+            {paymentMethod === "card" && (
+              <div className="payment-instructions card-box">
+                <h4>Card Payment Simulation (Stripe / International Gateway)</h4>
+                <p>In the production release, secure card processing will be integrated via LACD's accredited payment gateway.</p>
+                <div className="card-mock-row">
+                  <input placeholder="Card Number · 4000 1234 5678 9010" readOnly value="•••• •••• •••• 4242" />
+                  <input placeholder="MM/YY" readOnly value="12/28" style={{ width: "90px" }} />
+                  <input placeholder="CVC" readOnly value="•••" style={{ width: "70px" }} />
+                </div>
+              </div>
+            )}
+
+            <button className="button primary donate-submit-btn">
+              {frequency === "monthly" ? "Commit Monthly Gift" : "Complete Donation Pledge"} →
+            </button>
+          </form>
+
+          {submitted && (
+            <div className="pledge-confirmed">
+              <span>✓ Pledge Recorded</span>
+              <h3>Thank you for standing with Liberia's communities!</h3>
+              <p>An official acknowledgment email has been routed to <b>{donorEmail}</b> and our executive secretariat (<b>lacommunitydevelopment1@gmail.com</b> / <b>emmanuelpaye1978@gmail.com</b>).</p>
+            </div>
+          )}
+        </div>
+
+        <aside className="donate-sidebar">
+          <div className="sidebar-card glass-panel">
+            <span className="sidebar-tag">Why Donate</span>
+            <h3>Accountable stewardship</h3>
+            <p>LACD operates with community oversight, rigorous results tracking, and transparent reporting. Every dollar mobilized creates verified, local change.</p>
+            <ul className="accountability-list">
+              <li>✓ Legally registered Liberian NGO (Est. 2013)</li>
+              <li>✓ Independent governing board oversight</li>
+              <li>✓ Annual audited results published publicly</li>
+              <li>✓ Direct community-level accountability committees</li>
+            </ul>
+          </div>
+
+          <div className="sidebar-card glass-panel quote-card">
+            <blockquote>
+              "When you empower local producers, clean energy technicians, and women leaders, the entire nation moves forward sustainably."
+            </blockquote>
+            <span className="quote-author">— LACD Executive Leadership</span>
+          </div>
+
+          <div className="sidebar-card glass-panel">
+            <h3>Questions about donating?</h3>
+            <p>Contact our finance and partnerships team directly:</p>
+            <p><b>Phone:</b> <a href="tel:+231777011212">+231 777 011 212</a></p>
+            <p><b>Email:</b> <a href="mailto:lacommunitydevelopment1@gmail.com">lacommunitydevelopment1@gmail.com</a></p>
+            <p><b>Executive:</b> <a href="mailto:emmanuelpaye1978@gmail.com">emmanuelpaye1978@gmail.com</a></p>
+            <button className="button secondary" style={{ marginTop: "12px", width: "100%" }} onClick={() => navigate("contact")}>
+              Visit Contact Page →
+            </button>
+          </div>
+        </aside>
+      </div>
+    </Page>
+  );
+}
