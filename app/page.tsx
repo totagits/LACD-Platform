@@ -1502,7 +1502,6 @@ export default function Home() {
               <button className="button secondary" onClick={() => navigate("stories")}>See community results</button>
               <button className="button glass-gold" onClick={() => navigate("donate")}>♥ Support Our Work</button>
             </div>
-            <div className="trust-row"><span><b>Since 2013</b> locally rooted</span><span><b>15 counties</b> national ambition</span><span><b>6 programme areas</b> integrated action</span><span><b>Transparent</b> results and learning</span></div>
           </div>
           <div 
             className="activity-carousel glass-carousel" 
@@ -1541,6 +1540,26 @@ export default function Home() {
                   onClick={()=>{ setCarouselIndex(i); setCarouselProgress(0); }} 
                 />
               ))}
+            </div>
+          </div>
+        </section>
+        <section className="hero-stats-strip" aria-label="LACD Key Institutional Metrics">
+          <div className="hero-stats-grid">
+            <div className="hero-stat-card">
+              <b>Since 2013</b>
+              <span>Locally rooted in Liberian communities</span>
+            </div>
+            <div className="hero-stat-card">
+              <b>15 Counties</b>
+              <span>National reach and ambition</span>
+            </div>
+            <div className="hero-stat-card">
+              <b>6 Programme Areas</b>
+              <span>Integrated community action</span>
+            </div>
+            <div className="hero-stat-card">
+              <b>Transparent Results</b>
+              <span>Open learning and verified impact</span>
             </div>
           </div>
         </section>
