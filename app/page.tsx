@@ -24,7 +24,7 @@ type Resource = {
   sections?: ResourceSection[];
   content?: string[];
 };
-type Attachment = { key: string; label: string; required: boolean; file?: File | StoredFile };
+type Attachment = { key: string; label: string; required: boolean; file?: File | StoredFile; files?: (File | StoredFile)[] };
 const isStoredFile = (file: File | StoredFile | undefined): file is StoredFile => Boolean(file && "key" in file);
 type SolicitationContent = { scope: string; eligibility: string; evaluation: string; submission: string };
 type Opportunity = { status: string; tag: string; title: string; ref: string; deadline: string; description: string; specialties: string[]; solicitation?: SolicitationContent };
@@ -283,14 +283,14 @@ const defaultSolicitation: SolicitationContent = {
 };
 
 const initialAttachments: Attachment[] = [
-  { key: "technical", label: "Technical proposal", required: true },
-  { key: "financial", label: "Financial proposal", required: true },
-  { key: "registration", label: "Business registration", required: true },
-  { key: "tax", label: "Current tax clearance", required: true },
-  { key: "past", label: "Proof of past works / client attestations", required: true },
-  { key: "profile", label: "Company profile", required: true },
-  { key: "cvs", label: "Key personnel CVs", required: false },
-  { key: "other", label: "Other supporting document", required: false },
+  { key: "technical", label: "Technical proposal", required: true, files: [] },
+  { key: "financial", label: "Financial proposal", required: true, files: [] },
+  { key: "registration", label: "Business registration", required: true, files: [] },
+  { key: "tax", label: "Current tax clearance", required: true, files: [] },
+  { key: "past", label: "Proof of past works / client attestations", required: true, files: [] },
+  { key: "profile", label: "Company profile", required: true, files: [] },
+  { key: "cvs", label: "Key personnel CVs", required: false, files: [] },
+  { key: "other", label: "Other supporting document", required: false, files: [] },
 ];
 
 const basePath = process.env.NEXT_PUBLIC_BASE_PATH || "";
@@ -721,7 +721,16 @@ export default function Home() {
           if (state.bidderCredentialFiles) setBidderCredentialFiles(state.bidderCredentialFiles);
           if (state.credentialExpiry) setCredentialExpiry(state.credentialExpiry);
           if (state.bidderProfileComplete !== undefined) setBidderProfileComplete(state.bidderProfileComplete);
-          if (state.attachments) setAttachments(state.attachments);
+          if (state.attachments) {
+            setAttachments(state.attachments.map((item: any) => {
+              const rawFiles: (File | StoredFile)[] = (item.files && item.files.length > 0) ? item.files : (item.file ? [item.file] : []);
+              return {
+                ...item,
+                files: rawFiles,
+                file: rawFiles[0],
+              };
+            }));
+          }
           if (state.receipt) setReceipt(state.receipt);
         }
       }
@@ -737,7 +746,14 @@ export default function Home() {
     if (!persistenceReady.current) return;
     if (persistenceTimer.current) clearTimeout(persistenceTimer.current);
     const serializableCredentials = Object.fromEntries(Object.entries(bidderCredentialFiles).filter(([,file]) => file && !(file instanceof File)));
-    const serializableAttachments = attachments.map(item => ({...item, file: item.file && !(item.file instanceof File) ? item.file : undefined}));
+    const serializableAttachments = attachments.map(item => {
+      const cleanFiles = (item.files || (item.file ? [item.file] : [])).filter(f => !(f instanceof File));
+      return {
+        ...item,
+        file: cleanFiles[0],
+        files: cleanFiles,
+      };
+    });
     const state = { resources, contentItems, subscribers, cmsUsers, opportunities, clarifications, adminLog, carouselActivities, programmes, websiteRecords, richContent, bidder, bidderEmail, bidderSpecialties, bidderCredentialFiles: serializableCredentials, credentialExpiry, bidderProfileComplete, attachments: serializableAttachments, receipt };
     persistenceTimer.current = setTimeout(() => {
       try {
@@ -812,25 +828,77 @@ export default function Home() {
     return fixed.filter((item) => `${item.title} ${item.type} ${item.summary}`.toLowerCase().includes(q));
   }, [siteQuery, contentItems, resources, opportunities]);
 
+  const downloadFileOrStored = (file: File | StoredFile) => {
+    if (file instanceof File) {
+      const url = URL.createObjectURL(file);
+      const link = document.createElement("a");
+      link.href = url;
+      link.download = file.name;
+      link.click();
+      URL.revokeObjectURL(url);
+    } else {
+      downloadStoredFile(file);
+    }
+  };
+
   const upload = async (key: string, files: FileList | null) => {
-    const file = files?.[0];
-    if (!file) return;
+    if (!files || files.length === 0) return;
+    const incoming = Array.from(files);
     const allowed = ["application/pdf", "application/vnd.openxmlformats-officedocument.wordprocessingml.document", "application/msword"];
-    if (!allowed.includes(file.type) && !/\.(pdf|docx?)$/i.test(file.name)) {
-      alert("Please use PDF, DOC or DOCX files for this demonstration.", "info");
+
+    const invalid = incoming.filter(f => !allowed.includes(f.type) && !/\.(pdf|docx?)$/i.test(f.name));
+    if (invalid.length > 0) {
+      alert(`Invalid format for ${invalid.map(f => f.name).join(", ")}. Please attach PDF, DOC, or DOCX files.`, "info");
       return;
     }
-    if (file.size > 10 * 1024 * 1024) {
-      alert("This file exceeds the 10 MB demonstration limit.", "info");
+
+    const oversized = incoming.filter(f => f.size > 15 * 1024 * 1024);
+    if (oversized.length > 0) {
+      alert(`The file(s) ${oversized.map(f => f.name).join(", ")} exceed the 15 MB demonstration limit.`, "info");
       return;
     }
+
     try {
-      const stored = await persistFile(file, `proposals/${selectedTender.ref.replace(/[^a-z0-9]+/gi,"-")}`);
-      setAttachments((items) => items.map((item) => item.key === key ? { ...item, file:stored } : item));
-      alert(`${file.name} securely uploaded and attached.`);
+      const storedList: StoredFile[] = [];
+      for (const f of incoming) {
+        const stored = await persistFile(f, `proposals/${selectedTender.ref.replace(/[^a-z0-9]+/gi, "-")}/${key}`);
+        storedList.push(stored);
+      }
+
+      setAttachments((items) =>
+        items.map((item) => {
+          if (item.key !== key) return item;
+          const current = item.files && item.files.length > 0 ? item.files : (item.file ? [item.file] : []);
+          const existingNames = new Set(current.map(c => c.name));
+          const newEntries = storedList.filter(s => !existingNames.has(s.name));
+          const updated = [...current, ...newEntries];
+          return {
+            ...item,
+            files: updated,
+            file: updated[0],
+          };
+        })
+      );
+
+      alert(`${incoming.length} file${incoming.length > 1 ? "s" : ""} securely attached.`);
     } catch (error) {
-      alert(error instanceof Error ? error.message : "The file could not be uploaded.", "info");
+      alert(error instanceof Error ? error.message : "The file(s) could not be uploaded.", "info");
     }
+  };
+
+  const removeAttachmentFile = (key: string, fileName: string) => {
+    setAttachments((items) =>
+      items.map((item) => {
+        if (item.key !== key) return item;
+        const current = item.files && item.files.length > 0 ? item.files : (item.file ? [item.file] : []);
+        const filtered = current.filter((f) => f.name !== fileName);
+        return {
+          ...item,
+          files: filtered,
+          file: filtered[0],
+        };
+      })
+    );
   };
 
   const registerBidder = async (e: FormEvent) => {
@@ -923,12 +991,13 @@ export default function Home() {
   };
 
   const submitBid = () => {
-    const missing = attachments.filter((a) => a.required && !a.file);
-    if (missing.length) return alert(`Complete ${missing.length} required attachment${missing.length > 1 ? "s" : ""} before submission.`, "info");
+    const missing = attachments.filter((a) => a.required && (!a.files || a.files.length === 0) && !a.file);
+    if (missing.length) return alert(`Complete ${missing.length} required attachment categor${missing.length > 1 ? "ies" : "y"} before submission.`, "info");
     if (!declaration) return alert("Confirm the bidder declaration before submission.", "info");
     const code = `LACD-DEMO-${new Date().getFullYear()}-${String(Math.floor(Math.random() * 9000) + 1000)}`;
     setReceipt(code);
-    alert(`Proposal submitted. Receipt ${code} generated.`);
+    const totalFiles = attachments.reduce((acc, a) => acc + (a.files?.length || (a.file ? 1 : 0)), 0);
+    alert(`Proposal submitted with ${totalFiles} attached document${totalFiles === 1 ? "" : "s"}. Receipt ${code} generated.`);
   };
 
   const sendClarification = (e: FormEvent) => {
@@ -1187,16 +1256,137 @@ export default function Home() {
             <p>{selectedTender.description}</p>
             <div className="tab-cards">
               <article><span>01</span><h3>Official solicitation documents</h3><p>Download LACD-branded PDF documents created and published with this opportunity.</p>{["Request for Quotation", "Terms of Reference", "Financial Schedule", "Bidder Submission Forms"].map((d) => <button key={d} onClick={() => downloadSolicitationPdf(selectedTender, d)}>{d}<b>PDF ↓</b></button>)}</article>
-              <article className="bidder-access"><span>02</span><h3>Bidder account</h3>{!loggedIn ? <><div className="access-switch"><button className={bidderMode==="signin"?"active":""} onClick={()=>setBidderMode("signin")}>Sign in</button><button className={bidderMode==="register"?"active":""} onClick={()=>setBidderMode("register")}>Register company</button></div>{bidderMode==="signin"?<form className="compact-form" onSubmit={signInBidder}><label>Account email<input required type="email" value={bidderEmail} onChange={(e) => setBidderEmail(e.target.value)} placeholder="evaluator@example.com" /></label><label>Password<input required minLength={8} type="password" value={bidderPassword} onChange={e=>setBidderPassword(e.target.value)} /></label><button className="button primary">Sign in to bidder dashboard →</button></form>:<form className="compact-form registration-form" onSubmit={registerBidder}><label>Legal business name<input required value={bidder} onChange={e=>setBidder(e.target.value)} placeholder="Company legal name" /></label><label>Business email<input required type="email" value={bidderEmail} onChange={e=>setBidderEmail(e.target.value)} /></label><label>Create password<input required minLength={8} type="password" value={bidderPassword} onChange={e=>setBidderPassword(e.target.value)} /></label><label>Contact person<input required placeholder="Authorized representative" /></label><label>Phone number<input required placeholder="+231 ..." /></label><fieldset><legend>Business specialties</legend><div className="specialty-grid">{["Construction & works","IT & digital services","Agriculture & food security","Solar & renewable energy","Supplies & general merchandise","Consulting & professional services","Logistics & transportation","Catering & events"].map(s=><label key={s}><input type="checkbox" checked={bidderSpecialties.includes(s)} onChange={e=>setBidderSpecialties(x=>e.target.checked?[...x,s]:x.filter(v=>v!==s))}/><span>{s}</span></label>)}</div></fieldset><label>Business registration <small>Required · PDF/DOC</small><input required type="file" accept=".pdf,.doc,.docx" onChange={e=>setBidderCredentialFiles(x=>({...x,registration:e.target.files?.[0]}))}/></label><label>Tax clearance <small>Recommended</small><input type="file" accept=".pdf,.doc,.docx" onChange={e=>setBidderCredentialFiles(x=>({...x,tax:e.target.files?.[0]}))}/></label><label>Certifications / licenses <small>Multiple supporting credentials</small><input type="file" multiple accept=".pdf,.doc,.docx" onChange={e=>setBidderCredentialFiles(x=>({...x,certifications:e.target.files?.[0]}))}/></label><label className="declaration"><input required type="checkbox"/><span>I confirm that I am authorized to register this business.</span></label><button className="button primary">Create persistent bidder account →</button></form>}</> : <div className="signed-in"><b>{bidder}</b><span>{bidderEmail}</span><em>{bidderProfileComplete?"Persistent compliance profile":"Signed-in bidder"}</em><button onClick={() => setLoggedIn(false)}>Sign out</button></div>}</article>
+              <article className="bidder-access"><span>02</span><h3>Bidder account</h3>{!loggedIn ? <><div className="access-switch"><button className={bidderMode==="signin"?"active":""} onClick={()=>setBidderMode("signin")}>Sign in</button><button className={bidderMode==="register"?"active":""} onClick={()=>setBidderMode("register")}>Register company</button></div>{bidderMode==="signin"?<form className="compact-form" onSubmit={signInBidder}><label>Account email<input required type="email" value={bidderEmail} onChange={(e) => setBidderEmail(e.target.value)} placeholder="evaluator@example.com" /></label><label>Password<input required minLength={8} type="password" value={bidderPassword} onChange={e=>setBidderPassword(e.target.value)} /></label><button className="button primary">Sign in to bidder dashboard →</button></form>:<form className="compact-form registration-form" onSubmit={registerBidder}><label>Legal business name<input required value={bidder} onChange={e=>setBidder(e.target.value)} placeholder="Company legal name" /></label><label>Business email<input required type="email" value={bidderEmail} onChange={e=>setBidderEmail(e.target.value)} /></label><label>Create password<input required minLength={8} type="password" value={bidderPassword} onChange={e=>setBidderPassword(e.target.value)} /></label><label>Contact person<input required placeholder="Authorized representative" /></label><label>Phone number<input required placeholder="+231 ..." /></label><fieldset><legend>Business specialties</legend><div className="specialty-grid">{["Construction & works","IT & digital services","Agriculture & food security","Solar & renewable energy","Supplies & general merchandise","Consulting & professional services","Logistics & transportation","Catering & events"].map(s=><label key={s}><input type="checkbox" checked={bidderSpecialties.includes(s)} onChange={e=>setBidderSpecialties(x=>e.target.checked?[...x,s]:x.filter(v=>v!==s))}/><span>{s}</span></label>)}</div></fieldset><label>Business registration <small>Required · PDF/DOC · Multiple files supported</small><input required multiple type="file" accept=".pdf,.doc,.docx" onChange={e=>setBidderCredentialFiles(x=>({...x,registration:e.target.files?.[0]}))}/></label><label>Tax clearance <small>Recommended · Multiple files supported</small><input multiple type="file" accept=".pdf,.doc,.docx" onChange={e=>setBidderCredentialFiles(x=>({...x,tax:e.target.files?.[0]}))}/></label><label>Certifications / licenses <small>Multiple supporting credentials</small><input type="file" multiple accept=".pdf,.doc,.docx" onChange={e=>setBidderCredentialFiles(x=>({...x,certifications:e.target.files?.[0]}))}/></label><label className="declaration"><input required type="checkbox"/><span>I confirm that I am authorized to register this business.</span></label><button className="button primary">Create persistent bidder account →</button></form>}</> : <div className="signed-in"><b>{bidder}</b><span>{bidderEmail}</span><em>{bidderProfileComplete?"Persistent compliance profile":"Signed-in bidder"}</em><button onClick={() => setLoggedIn(false)}>Sign out</button></div>}</article>
             </div>
             {loggedIn && <nav className="bidder-dashboard-nav"><button className={bidderWorkspaceTab==="opportunity"?"active":""} onClick={()=>setBidderWorkspaceTab("opportunity")}>Eligible RFQ/RFPs</button><button disabled={!tenderSelected} className={bidderWorkspaceTab==="submission"?"active":""} onClick={()=>setBidderWorkspaceTab("submission")}>Proposal submission</button><button disabled={!tenderSelected} className={bidderWorkspaceTab==="clarifications"?"active":""} onClick={()=>setBidderWorkspaceTab("clarifications")}>Clarifications <b>{clarifications.length}</b></button><button className={bidderWorkspaceTab==="profile"?"active":""} onClick={()=>setBidderWorkspaceTab("profile")}>Compliance profile</button></nav>}
             {loggedIn && bidderWorkspaceTab==="opportunity" && (!tenderSelected?<div className="selection-gate"><span>01</span><div><p className="eyebrow">Required first step</p><h3>Select an eligible RFQ/RFP</h3><p>Choose an aligned opportunity from the left. Proposal and Clarification tools remain locked until a specific procurement is selected.</p></div></div>:<div className="bidder-welcome"><div><p className="eyebrow">Selected opportunity</p><h3>{selectedTender.title}</h3><p>{selectedTender.description}</p></div><button className="button primary" onClick={()=>setBidderWorkspaceTab("clarifications")}>Ask about this RFQ/RFP →</button></div>)}
             {loggedIn && tenderSelected && bidderWorkspaceTab==="submission" && selectedTender.status === "Open" && <div className="submission">
-              <div className="submission-heading"><div><p className="eyebrow">Proposal submission</p><h3>Required attachments</h3></div><span>{attachments.filter((a) => a.file).length}/{attachments.filter((a) => a.required).length} attached</span></div>
-              <div className="attachment-grid">{attachments.map((a) => <label className={a.file ? "attachment attached" : "attachment"} key={a.key}><span>{a.required ? "Required" : "Optional"}</span><b>{a.label}</b><small>{a.file ? `${a.file.name} · ${(a.file.size / 1024).toFixed(0)} KB · ${isStoredFile(a.file)?"Persisted":"Attached"}` : "PDF, DOC or DOCX · maximum 10 MB"}</small>{isStoredFile(a.file)&&<button type="button" className="text-button inline-download" onClick={e=>{e.stopPropagation();downloadStoredFile(a.file as StoredFile);}}>Download attached file ↓</button>}<input type="file" accept=".pdf,.doc,.docx" onChange={(e) => upload(a.key, e.target.files)} /><i>{a.file ? "Replace file" : "Choose file"}</i></label>)}</div>
+              <div className="submission-heading">
+                <div>
+                  <p className="eyebrow">Proposal submission</p>
+                  <h3>Required attachments</h3>
+                </div>
+                <div className="submission-stats-badge">
+                  <b>{attachments.filter((a) => (a.files && a.files.length > 0) || a.file).length}/{attachments.filter((a) => a.required).length} categories completed</b>
+                  <span> · {attachments.reduce((sum, a) => sum + (a.files?.length || (a.file ? 1 : 0)), 0)} files attached</span>
+                </div>
+              </div>
+
+              <div className="attachment-grid">
+                {attachments.map((a) => {
+                  const itemFiles = a.files && a.files.length > 0 ? a.files : (a.file ? [a.file] : []);
+                  const isDone = itemFiles.length > 0;
+                  const totalSizeKb = (itemFiles.reduce((sum, f) => sum + f.size, 0) / 1024).toFixed(0);
+
+                  return (
+                    <div className={`attachment ${isDone ? "attached" : ""}`} key={a.key}>
+                      <div className="attachment-top">
+                        <span className={`attachment-req-tag ${a.required ? "req" : "opt"}`}>
+                          {a.required ? "Required" : "Optional"}
+                        </span>
+                        {isDone ? (
+                          <span className="attachment-status-badge">
+                            ✓ {itemFiles.length} file{itemFiles.length > 1 ? "s" : ""} ({totalSizeKb} KB)
+                          </span>
+                        ) : (
+                          <span className="attachment-status-badge pending">
+                            Multiple files allowed
+                          </span>
+                        )}
+                      </div>
+
+                      <b className="attachment-title">{a.label}</b>
+
+                      {itemFiles.length === 0 ? (
+                        <div className="attachment-empty-drop">
+                          <small>PDF, DOC or DOCX · up to 15 MB each</small>
+                          <label className="upload-trigger-btn">
+                            <input
+                              type="file"
+                              multiple
+                              accept=".pdf,.doc,.docx"
+                              onChange={(e) => {
+                                upload(a.key, e.target.files);
+                                e.target.value = "";
+                              }}
+                            />
+                            <span>+ Choose file(s)</span>
+                          </label>
+                        </div>
+                      ) : (
+                        <div className="attachment-active-content">
+                          <div className="attachment-file-list">
+                            {itemFiles.map((file, idx) => (
+                              <div key={`${file.name}-${idx}`} className="file-chip">
+                                <span className="chip-icon">📄</span>
+                                <span className="chip-name" title={file.name}>{file.name}</span>
+                                <span className="chip-size">{(file.size / 1024).toFixed(0)} KB</span>
+                                <button
+                                  type="button"
+                                  className="chip-action download"
+                                  title={`Download ${file.name}`}
+                                  onClick={(e) => {
+                                    e.stopPropagation();
+                                    downloadFileOrStored(file);
+                                  }}
+                                >
+                                  ↓
+                                </button>
+                                <button
+                                  type="button"
+                                  className="chip-action remove"
+                                  title={`Remove ${file.name}`}
+                                  onClick={(e) => {
+                                    e.stopPropagation();
+                                    removeAttachmentFile(a.key, file.name);
+                                  }}
+                                >
+                                  ✕
+                                </button>
+                              </div>
+                            ))}
+                          </div>
+
+                          <div className="attachment-foot-row">
+                            <label className="add-more-btn">
+                              <input
+                                type="file"
+                                multiple
+                                accept=".pdf,.doc,.docx"
+                                onChange={(e) => {
+                                  upload(a.key, e.target.files);
+                                  e.target.value = "";
+                                }}
+                              />
+                              <span>+ Add more files</span>
+                            </label>
+                            <span className="attachment-total-meta">
+                              Total: {totalSizeKb} KB
+                            </span>
+                          </div>
+                        </div>
+                      )}
+                    </div>
+                  );
+                })}
+              </div>
+
               <label className="declaration"><input type="checkbox" checked={declaration} onChange={(e) => setDeclaration(e.target.checked)} /><span>I declare that the submitted information is accurate and I am authorized to submit this proposal.</span></label>
               <button className="button primary submit-button" onClick={submitBid}>Validate and submit proposal →</button>
-              {receipt && <div className="receipt"><span>Submission receipt</span><b>{receipt}</b><p>Timestamp: {new Date().toLocaleString()} · Status: Received in demonstration sandbox</p><button onClick={() => downloadDemo(`Submission Receipt ${receipt}`, `${bidder}\n${selectedTender.ref}\nStatus: Received`)}>Download receipt</button></div>}
+              {receipt && (
+                <div className="receipt">
+                  <span>Submission receipt</span>
+                  <b>{receipt}</b>
+                  <p>Timestamp: {new Date().toLocaleString()} · Status: Received in demonstration sandbox · {attachments.reduce((sum, a) => sum + (a.files?.length || (a.file ? 1 : 0)), 0)} documents attached</p>
+                  <button onClick={() => {
+                    const allFilesList = attachments
+                      .filter(a => (a.files && a.files.length > 0) || a.file)
+                      .map(a => `- ${a.label}: ${(a.files && a.files.length > 0 ? a.files : [a.file!]).map(f => `${f.name} (${(f.size/1024).toFixed(0)} KB)`).join(", ")}`)
+                      .join("\n");
+                    downloadDemo(`Submission Receipt ${receipt}`, `BIDDER: ${bidder}\nTENDER: ${selectedTender.ref} - ${selectedTender.title}\nSTATUS: Received in electronic procurement system\nTIMESTAMP: ${new Date().toLocaleString()}\n\nATTACHED PROPOSAL DOCUMENTS:\n${allFilesList}\n\nLiberia Agency for Community Development · Electronic Procurement Portal`);
+                  }}>Download receipt</button>
+                </div>
+              )}
             </div>}
             {(!loggedIn || bidderWorkspaceTab==="clarifications") && <div className="clarification-centre" id="clarifications"><p className="eyebrow">Tender-specific clarifications</p><h3>Questions and official LACD responses</h3><p>Clarification messages are attached to <b>{selectedTender.ref}</b> and remain visible in your bidder account.</p><div className="thread">{clarifications.map((c, i) => <article key={`${c.time}-${i}`}><b>{c.from}</b><p>{c.text}</p><small>{c.time}</small></article>)}</div>{loggedIn ? <form onSubmit={sendClarification}><label><span>Subject / clause reference</span><input required placeholder="Example: TOR section 4.2" /></label><label><span>Clarification question</span><textarea required value={clarification} onChange={(e) => setClarification(e.target.value)} placeholder="State the question clearly without including confidential bid information." /></label><label><span>Supporting attachment (optional)</span><input type="file" accept=".pdf,.doc,.docx" /></label><button className="button primary">Send clarification to LACD →</button></form> : <div className="callout"><b>Want to ask LACD a question?</b><p>Sign in or register a bidder account above, then open the Clarifications tab.</p></div>}</div>}
             {loggedIn && bidderWorkspaceTab==="profile" && <section className="bidder-profile"><div><p className="eyebrow">Company profile</p><h3>{bidder}</h3><p>{bidderEmail}</p><strong className={bidderCompliant?"compliance-pass":"compliance-hold"}>{bidderCompliant?"Compliant · eligible for matching opportunities":"Compliance hold · opportunities restricted"}</strong></div><div><b>Approved specialties</b>{bidderSpecialties.length?bidderSpecialties.map(x=><span className="focus-chip" key={x}>{x}</span>):<p>Add specialties during registration or profile editing.</p>}</div><div className="credential-status"><b>Compliance documents and validity</b>{([['registration','Business registration'],['tax','Tax clearance'],['certifications','Certificates / licenses']] as const).map(([key,label])=><label key={key}><span>{bidderCredentialFiles[key]?`✓ ${label} uploaded`:`○ ${label} pending`}</span><small>Valid through</small><input type="date" value={credentialExpiry[key]} onChange={e=>setCredentialExpiry(x=>({...x,[key]:e.target.value}))}/></label>)}<button onClick={()=>{setBidderMode("register");setLoggedIn(false)}}>Update documents and specialties</button></div></section>}
