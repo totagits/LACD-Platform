@@ -2,4 +2,4 @@
 2:I[39756,["/LACD-Platform/_next/static/chunks/0dbhjjzl8qfwv.js"],"default"]
 3:I[37457,["/LACD-Platform/_next/static/chunks/0dbhjjzl8qfwv.js"],"default"]
 4:[]
-0:{"rsc":["$","$1","c",{"children":[null,["$","$L2",null,{"parallelRouterKey":"children","template":["$","$L3",null,{}]}]]}],"isPartial":false,"staleTime":300,"varyParams":"$W4","buildId":"7RYkmcDPwSui31DbHVF_i"}
+0:{"rsc":["$","$1","c",{"children":[null,["$","$L2",null,{"parallelRouterKey":"children","template":["$","$L3",null,{}]}]]}],"isPartial":false,"staleTime":300,"varyParams":"$W4","buildId":"87UrcPnqU3g8gZF1jHF9B"}
