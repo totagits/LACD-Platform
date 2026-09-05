@@ -627,7 +627,7 @@ const initialAttachments: Attachment[] = [
   { key: "other", label: "Other supporting document", required: false, files: [] },
 ];
 
-const basePath = process.env.NEXT_PUBLIC_BASE_PATH || "";
+const basePath = process.env.NEXT_PUBLIC_BASE_PATH ?? "/LACD-Platform";
 function asset(path?: string) {
   if (!path) return "";
   if (path.startsWith("http://") || path.startsWith("https://") || path.startsWith("data:")) return path;

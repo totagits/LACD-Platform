@@ -12,7 +12,7 @@ const geistMono = Geist_Mono({
   subsets: ["latin"],
 });
 
-const basePath = process.env.NEXT_PUBLIC_BASE_PATH || "";
+const basePath = process.env.NEXT_PUBLIC_BASE_PATH ?? "/LACD-Platform";
 
 export const metadata: Metadata = {
   title: "Liberia Agency for Community Development | LACD",
