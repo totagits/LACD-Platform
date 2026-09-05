@@ -368,7 +368,9 @@ const starterContent: ContentItem[] = [
   { id: 1, type: "News", title: "Community-led planning strengthens local ownership", date: "28 July 2026", summary: "LACD convened community representatives to review priorities, implementation responsibilities and local accountability mechanisms.", category:"Governance", author:"LACD Communications Unit", body:"Community representatives, programme teams and local leaders reviewed shared priorities and agreed practical accountability measures. The process places community knowledge at the centre of planning, implementation and learning.", image:"/activities/lacd-community-distribution.png" },
   { id: 2, type: "Success Story", title: "Women producers turn post-harvest loss into opportunity", date: "18 July 2026", summary: "A learning story illustrating how skills, appropriate technology and collective enterprise can strengthen household income.", category:"Women & Livelihoods", author:"LACD Programme Team", body:"A women-led producer group combined improved drying, business coaching and collective marketing to reduce losses and improve product quality.", result:"35 producers trained · 22% illustrative reduction in post-harvest loss · 3 new buyer relationships", image:"/activities/agriculture-training.png" },
   { id: 3, type: "Event", title: "Community Development Learning Forum", date: "14 August 2026", summary: "Partners, programme teams and community leaders share implementation evidence and practical lessons.", category:"Learning Forum", author:"LACD Secretariat", body:"The forum brings together community leaders, partners and practitioners for programme demonstrations, evidence sessions and action planning." },
-  { id: 4, type: "Vacancy", title: "Programme Monitoring and Learning Officer", date: "Closing 22 August 2026", summary: "Illustrative vacancy demonstrating LACD's careers publishing and downloadable job-description workflow.", status: "Open", category:"Monitoring & Evaluation", author:"Human Resources", body:"The officer will strengthen results frameworks, field monitoring, data quality, learning products and programme accountability. Applicants should demonstrate relevant education, experience and commitment to safeguarding." },
+  { id: 4, type: "Vacancy", title: "Programme Monitoring, Evaluation & Learning (MEL) Officer", date: "Closing 28 August 2026", summary: "Lead results tracking, field data verification, quantitative/qualitative impact assessments and institutional learning across LACD's 6 programme areas.", status: "Open", category:"Monitoring & Evaluation", author:"Human Resources", body:"DUTIES & RESPONSIBILITIES:\n1. Maintain and improve LACD's results measurement frameworks, baseline data and indicator matrices.\n2. Conduct regular field verification visits across target counties (Bomi, Grand Cape Mount, Gbarpolu, Margibi).\n3. Prepare monthly and quarterly evidence reports for donors, government counterparts and community stakeholders.\n4. Oversee community feedback and safeguarding grievance integration within M&E systems.\n\nQUALIFICATIONS & EXPERIENCE:\n- Bachelor's degree in Economics, Statistics, Social Sciences, Development Studies, or related field.\n- Minimum 3–5 years of professional experience in NGO/humanitarian M&E.\n- Proficiency in KoboToolbox, ODK, Excel data analysis, and GIS mapping.\n- Strong commitment to community accountability and zero-tolerance safeguarding standards." },
+  { id: 5, type: "Vacancy", title: "Community Agriculture & Food Systems Specialist", date: "Closing 31 August 2026", summary: "Provide technical leadership in climate-smart agriculture, post-harvest storage facilities, farmer field schools and producer group market readiness.", status: "Open", category:"Food Security & Agriculture", author:"Human Resources", body:"DUTIES & RESPONSIBILITIES:\n1. Lead farmer training in climate-resilient crop rotation, organic soil conditioning and water management.\n2. Supervise installation and community operation of communal solar dryers and hermetic grain storage units.\n3. Facilitate formal buyer agreements and commercial linkages for women and youth producer cooperatives.\n4. Deliver technical inputs for donor proposals and agricultural impact assessments.\n\nQUALIFICATIONS & EXPERIENCE:\n- BSc in Agronomy, Agricultural Economics, or Rural Development (Master's preferred).\n- Minimum 4 years practical field experience supporting smallholder farmer cooperatives in Liberia.\n- Demonstrated fluency in local community engagement and participatory extension methodologies." },
+  { id: 6, type: "Vacancy", title: "Finance & Grants Compliance Associate", date: "Closing 05 September 2026", summary: "Ensure strict fiduciary management, donor financial reporting compliance, budget tracking and procurement expenditure audit readiness.", status: "Open", category:"Finance & Administration", author:"Human Resources", body:"DUTIES & RESPONSIBILITIES:\n1. Manage project financial ledgers, disbursements, payroll records and bank reconciliations in QuickBooks.\n2. Ensure full compliance with Liberian tax laws, PPCC procurement thresholds and donor grant agreements.\n3. Coordinate internal and statutory external audits, maintaining clean documentation vaults for all disbursements.\n4. Assist Programme Managers with budget variance analysis and expenditure forecasting.\n\nQUALIFICATIONS & EXPERIENCE:\n- BBA in Accounting or Finance (CPA or CA qualification is an added advantage).\n- Minimum 3 years of financial management experience in donor-funded NGO projects.\n- High integrity, analytical rigor, and proven audit clearance track record." }
 ];
 
 const galleryItems = [
@@ -1436,20 +1438,38 @@ export default function Home() {
           <img src={asset("/lacd-logo.jpg")} alt="Liberia Agency for Community Development logo" />
           <span><strong>LACD</strong><small>Liberia Agency for Community Development</small></span>
         </button>
-        <nav aria-label="Primary navigation">
+        <nav aria-label="Primary navigation" className="primary-nav-streamlined">
           <button className={view==="home"?"active":""} onClick={() => navigate("home")}>Home</button>
-          <button onClick={() => navigate("about")}>About</button>
-          <button onClick={() => navigate("programmes")}>Our work</button>
-          <button onClick={() => navigate("news")}>News & stories</button>
-          <button onClick={() => navigate("gallery")}>Gallery</button>
-          <button onClick={() => navigate("resources")}>Public information</button>
-          <button onClick={() => navigate("procurement")}>Procurement</button>
-          <button onClick={() => navigate("contact")}>Contact</button>
+          <button className={view==="about"?"active":""} onClick={() => navigate("about")}>About</button>
+          <button className={view==="programmes"?"active":""} onClick={() => navigate("programmes")}>Our work</button>
+          
+          <div className="nav-dropdown-group">
+            <button className={`nav-dropdown-trigger ${["resources","news","stories","gallery","contact"].includes(view)?"active":""}`}>
+              Public information <span className="chevron-arrow">▾</span>
+            </button>
+            <div className="nav-dropdown-menu">
+              <button onClick={() => navigate("resources")}><span>📄</span> Public Information Centre</button>
+              <button onClick={() => navigate("news")}><span>📰</span> News & Stories</button>
+              <button onClick={() => navigate("gallery")}><span>📸</span> Gallery & Media</button>
+              <button onClick={() => navigate("contact")}><span>✉</span> Contact & Feedback</button>
+            </div>
+          </div>
+
+          <div className="nav-dropdown-group">
+            <button className={`nav-dropdown-trigger ${["careers","procurement"].includes(view)?"active":""}`}>
+              Opportunities <span className="chevron-arrow">▾</span>
+            </button>
+            <div className="nav-dropdown-menu">
+              <button onClick={() => navigate("careers")}><span>💼</span> Careers & Vacancies</button>
+              <button onClick={() => navigate("procurement")}><span>📋</span> Procurement & Tenders</button>
+            </div>
+          </div>
+
           <button className={`nav-donate-pill ${view==="donate"?"active":""}`} onClick={() => navigate("donate")}>♥ Donate</button>
         </nav>
         <form className="header-search" onSubmit={(e) => { e.preventDefault(); if (siteQuery.trim()) navigate("search"); }}><label><span className="sr-only">Search the LACD website</span><input value={siteQuery} onChange={(e) => setSiteQuery(e.target.value)} placeholder="Search" /></label><button aria-label="Search">⌕</button></form>
         <button className="nav-cta" onClick={() => staffLoggedIn ? navigate("admin") : setLoginOpen(true)}>{staffLoggedIn ? "Dashboard" : "Staff sign in"}</button>
-        <details className="mobile-menu"><summary>Menu</summary><div>{[{v:"home",t:"Home"},{v:"about",t:"About LACD"},{v:"vision",t:"Vision & mission"},{v:"strategy",t:"Strategic Plan"},{v:"programmes",t:"Programmes"},{v:"projects",t:"Projects"},{v:"donate",t:"♥ Donate / Support"},{v:"news",t:"News & stories"},{v:"careers",t:"Careers"},{v:"events",t:"Events"},{v:"gallery",t:"Gallery"},{v:"resources",t:"Public information"},{v:"procurement",t:"Procurement"},{v:"contact",t:"Contact"}].map(x=><button key={x.v} onClick={()=>navigate(x.v as View)}>{x.t}</button>)}</div></details>
+        <details className="mobile-menu"><summary>Menu</summary><div>{[{v:"home",t:"Home"},{v:"about",t:"About LACD"},{v:"vision",t:"Vision & mission"},{v:"strategy",t:"Strategic Plan"},{v:"programmes",t:"Programmes"},{v:"projects",t:"Projects"},{v:"resources",t:"Public information"},{v:"news",t:"News & stories"},{v:"gallery",t:"Gallery"},{v:"contact",t:"Contact"},{v:"careers",t:"Careers"},{v:"procurement",t:"Procurement"},{v:"donate",t:"♥ Donate / Support"}].map(x=><button key={x.v} onClick={()=>navigate(x.v as View)}>{x.t}</button>)}</div></details>
       </header>
       {loginOpen && <div className="login-overlay" role="dialog" aria-modal="true" aria-label="LACD staff sign in"><form className="login-card" onSubmit={e=>{e.preventDefault();setStaffLoggedIn(true);setLoginOpen(false);setAdminPanel(rolePanels[staffRole][0]);navigate("admin");alert(`Signed in as ${staffRole}. Your dashboard shows only authorized tools.`)}}><button type="button" className="login-close" onClick={()=>setLoginOpen(false)}>Close ×</button><img src={asset("/lacd-logo.jpg")} alt="LACD" /><p className="eyebrow">Secure staff portal demonstration</p><h2>Sign in to your workspace</h2><label>Demo role<select value={staffRole} onChange={e=>setStaffRole(e.target.value as StaffRole)}><option>Administrator</option><option>Content Editor</option><option>Programme Author</option><option>Procurement Publisher</option><option>Analytics Viewer</option></select></label><label>Email address<input required type="email" defaultValue="admin@lacd.demo" /></label><label>Password<input required type="password" defaultValue="Demo@2026" /></label><button className="button primary">Sign in and open dashboard →</button><small>Evaluator sandbox: select any role to inspect its role-based access. Production authentication will use LACD-approved identity controls.</small></form></div>}
 
