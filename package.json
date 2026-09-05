@@ -8,6 +8,8 @@
   "scripts": {
     "dev": "next dev",
     "build": "next build",
+    "build:pages": "cross-env NEXT_PUBLIC_BASE_PATH=/LACD-Platform next build",
+    "deploy": "next build && git -C out add -A && git -C out commit -m \"Deploy to GitHub Pages\" && git -C out push origin gh-pages",
     "start": "next start",
     "lint": "next lint"
   },
