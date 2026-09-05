@@ -960,6 +960,7 @@ export default function Home() {
 
   const [carouselPaused, setCarouselPaused] = useState(false);
   const [carouselProgress, setCarouselProgress] = useState(0);
+  const [activeDropdown, setActiveDropdown] = useState<string | null>(null);
 
   // Enterprise Document Vault States (with strict RBAC)
   const [vaultRole, setVaultRole] = useState<VaultRole>("public");
@@ -979,6 +980,7 @@ export default function Home() {
 
   const navigate = (next: View) => {
     setView(next);
+    setActiveDropdown(null);
     window.history.replaceState(null, "", `#${next}`);
     window.scrollTo({ top: 0, behavior: "smooth" });
   };
@@ -1443,8 +1445,16 @@ export default function Home() {
           <button className={view==="about"?"active":""} onClick={() => navigate("about")}>About</button>
           <button className={view==="programmes"?"active":""} onClick={() => navigate("programmes")}>Our work</button>
           
-          <div className="nav-dropdown-group">
-            <button className={`nav-dropdown-trigger ${["resources","news","stories","gallery","contact"].includes(view)?"active":""}`}>
+          <div 
+            className={`nav-dropdown-group ${activeDropdown === "public-info" ? "open" : ""}`}
+            onMouseEnter={() => setActiveDropdown("public-info")}
+            onMouseLeave={() => setActiveDropdown(null)}
+          >
+            <button 
+              type="button"
+              className={`nav-dropdown-trigger ${["resources","news","stories","gallery","contact"].includes(view)?"active":""}`}
+              onClick={() => setActiveDropdown(activeDropdown === "public-info" ? null : "public-info")}
+            >
               Public information <span className="chevron-arrow">▾</span>
             </button>
             <div className="nav-dropdown-menu">
@@ -1455,8 +1465,16 @@ export default function Home() {
             </div>
           </div>
 
-          <div className="nav-dropdown-group">
-            <button className={`nav-dropdown-trigger ${["careers","procurement"].includes(view)?"active":""}`}>
+          <div 
+            className={`nav-dropdown-group ${activeDropdown === "opportunities" ? "open" : ""}`}
+            onMouseEnter={() => setActiveDropdown("opportunities")}
+            onMouseLeave={() => setActiveDropdown(null)}
+          >
+            <button 
+              type="button"
+              className={`nav-dropdown-trigger ${["careers","procurement"].includes(view)?"active":""}`}
+              onClick={() => setActiveDropdown(activeDropdown === "opportunities" ? null : "opportunities")}
+            >
               Opportunities <span className="chevron-arrow">▾</span>
             </button>
             <div className="nav-dropdown-menu">

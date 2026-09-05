@@ -2232,7 +2232,7 @@ body{background:radial-gradient(circle at 10% 5%,#dcebcbaa 0,transparent 31%),ra
   font-size: 9px;
   transition: transform 0.2s ease;
 }
-.nav-dropdown-group:hover .chevron-arrow {
+.nav-dropdown-group.open .chevron-arrow {
   transform: rotate(180deg);
 }
 .nav-dropdown-menu {
@@ -2256,9 +2256,7 @@ body{background:radial-gradient(circle at 10% 5%,#dcebcbaa 0,transparent 31%),ra
   display: flex;
   flex-direction: column;
   gap: 4px;
-}
-.nav-dropdown-group:hover .nav-dropdown-menu,
-.nav-dropdown-group:focus-within .nav-dropdown-menu {
+.nav-dropdown-group.open .nav-dropdown-menu {
   opacity: 1;
   visibility: visible;
   pointer-events: auto;
