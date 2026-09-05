@@ -626,7 +626,7 @@ export default function Home() {
       <header className="site-header">
         <button className="brand brand-button" onClick={() => navigate("home")} aria-label="LACD homepage">
           <img src={asset("/lacd-logo.jpg")} alt="Liberia Agency for Community Development logo" />
-          <span><strong>LACD</strong><small>Community-led. Evidence-driven.</small></span>
+          <span><strong>LACD</strong><small>Liberia Agency for Community Development</small></span>
         </button>
         <nav aria-label="Primary navigation">
           <button className={view==="home"?"active":""} onClick={() => navigate("home")}>Home</button>
