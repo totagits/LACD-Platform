@@ -3,7 +3,7 @@
 import { FormEvent, useEffect, useMemo, useRef, useState } from "react";
 import { jsPDF } from "jspdf";
 
-type View = "home" | "about" | "vision" | "strategy" | "programmes" | "programme-detail" | "projects" | "news" | "stories" | "careers" | "events" | "content-detail" | "gallery" | "partners" | "resources" | "procurement" | "contact" | "donate" | "privacy" | "terms" | "search" | "admin";
+type View = "home" | "about" | "vision" | "strategy" | "programmes" | "programme-detail" | "projects" | "news" | "stories" | "careers" | "events" | "content-detail" | "gallery" | "partners" | "resources" | "procurement" | "contact" | "donate" | "vault" | "privacy" | "terms" | "search" | "admin";
 type Notice = { type: "success" | "info"; text: string } | null;
 type StoredFile = { key: string; name: string; type: string; size: number; scanStatus: string };
 type ResourceSection = {
@@ -29,6 +29,340 @@ const isStoredFile = (file: File | StoredFile | undefined): file is StoredFile =
 type SolicitationContent = { scope: string; eligibility: string; evaluation: string; submission: string };
 type Opportunity = { status: string; tag: string; title: string; ref: string; deadline: string; description: string; specialties: string[]; solicitation?: SolicitationContent };
 type ContentItem = { id: number; type: "News" | "Success Story" | "Vacancy" | "Event"; title: string; date: string; summary: string; status?: string; category: string; author: string; body: string; result?: string; image?: string; cmsStatus?: "Published"|"Draft"|"Scheduled"|"Archived" };
+
+export type VaultRole = "public" | "procurement_officer" | "finance_officer" | "safeguarding_officer" | "executive_admin";
+export type VaultModuleId = "procurement" | "donations" | "complaints" | "institutional";
+
+export type VaultFileItem = {
+  name: string;
+  size: number;
+  type?: string;
+  category?: string;
+};
+
+export type VaultBidRecord = {
+  id: string;
+  ref: string;
+  tenderTitle: string;
+  bidderName: string;
+  bidderEmail: string;
+  bidderPhone: string;
+  submittedAt: string;
+  status: "Pending Opening" | "Under Evaluation" | "Compliance Cleared" | "Disqualified" | "Awarded";
+  categories: {
+    key: string;
+    label: string;
+    files: VaultFileItem[];
+  }[];
+  totalFiles: number;
+  evaluationNote?: string;
+};
+
+export type VaultDonationRecord = {
+  id: string;
+  donorName: string;
+  donorEmail: string;
+  channel: "MTN MoMo" | "Orange Money" | "Bank Wire Transfer" | "Card / Gateway";
+  referenceCode: string;
+  amountUsd: number;
+  frequency: "one-time" | "monthly";
+  allocatedPillar: string;
+  date: string;
+  status: "Confirmed & Audited" | "Pledged" | "Receipt Issued";
+  phone?: string;
+};
+
+export type VaultComplaintRecord = {
+  id: string;
+  category: "Safeguarding & Harassment" | "Procurement Integrity / Fraud" | "Service Delivery Quality" | "Environmental / Social" | "General Grievance";
+  complainantName: string;
+  complainantContact?: string;
+  submittedAt: string;
+  severity: "Critical / High" | "Medium" | "Routine";
+  subject: string;
+  details: string;
+  status: "Received & Acknowledged" | "Independent Panel Review" | "Corrective Action" | "Case Closed";
+  assignedOfficer: string;
+  investigationNotes: string[];
+};
+
+export type VaultInstitutionalRecord = {
+  id: string;
+  title: string;
+  category: "Board Resolution" | "Statutory Audit" | "PPCC Clearance" | "MOU & Partnership" | "Fiduciary Policy";
+  year: string;
+  referenceNo: string;
+  signatory: string;
+  classification: "Executive Confidential" | "Internal Operational" | "Public Archive";
+  summary: string;
+  fileSize: string;
+};
+
+export const ROLE_PERMISSIONS: Record<VaultRole, {
+  label: string;
+  passkey: string;
+  badge: string;
+  badgeClass: string;
+  allowedModules: VaultModuleId[];
+  description: string;
+}> = {
+  public: {
+    label: "Public Citizen / Auditor",
+    passkey: "",
+    badge: "Public Transparency View",
+    badgeClass: "badge-public",
+    allowedModules: [],
+    description: "Sanitized high-level public transparency register. Sensitive bidder files, donor information, and safeguarding cases are restricted."
+  },
+  procurement_officer: {
+    label: "Procurement & Contracts Officer",
+    passkey: "LACD-PROC-2026",
+    badge: "Procurement Clearance (RBAC)",
+    badgeClass: "badge-procurement",
+    allowedModules: ["procurement"],
+    description: "Authorized for RFQ bids, bidder compliance packages, multi-file attachments, and tender evaluations. Access to Donations, Complaints, and Board files is strictly denied."
+  },
+  finance_officer: {
+    label: "Finance & Donor Relations Officer",
+    passkey: "LACD-DONOR-2026",
+    badge: "Finance & Donor Clearance (RBAC)",
+    badgeClass: "badge-finance",
+    allowedModules: ["donations"],
+    description: "Authorized for MoMo, Orange Money, and Bank wire contributions, tax receipts, and financial ledgers. Access to Procurement bids and Complaints is strictly denied."
+  },
+  safeguarding_officer: {
+    label: "Safeguarding, Ethics & Legal Officer",
+    passkey: "LACD-ETHICS-2026",
+    badge: "Ethics & Safeguarding Clearance (RBAC)",
+    badgeClass: "badge-ethics",
+    allowedModules: ["complaints"],
+    description: "Authorized for confidential community grievances, whistleblower disclosures, and safeguarding panel reviews. Access to Procurement and Donations is strictly denied."
+  },
+  executive_admin: {
+    label: "Executive Director / Internal Auditor",
+    passkey: "LACD-ADMIN-2026",
+    badge: "Executive & Cross-Module Clearance",
+    badgeClass: "badge-executive",
+    allowedModules: ["procurement", "donations", "complaints", "institutional"],
+    description: "Full overarching fiduciary oversight across Procurement, Donor Contributions, Safeguarding Grievances, and Institutional Board Archives."
+  }
+};
+
+const starterVaultBids: VaultBidRecord[] = [
+  {
+    id: "LACD-RFQ-2026-007-BID-4921",
+    ref: "LACD/RFQ/2026/007",
+    tenderTitle: "Development of the LACD Website",
+    bidderName: "TOTAG IT Services Liberia Ltd.",
+    bidderEmail: "info@totagits.com",
+    bidderPhone: "+231 777 000 111",
+    submittedAt: "05 Sep 2026 · 11:45 GMT",
+    status: "Compliance Cleared",
+    totalFiles: 8,
+    evaluationNote: "Fully compliant with RFQ specifications; multi-file schedule and tax clearances verified with LRA.",
+    categories: [
+      { key: "technical", label: "Technical proposal", files: [{ name: "TOTAG_Technical_Proposal_LACD.pdf", size: 2450000, type: "application/pdf" }, { name: "System_Architecture_And_Security_Plan.pdf", size: 1820000, type: "application/pdf" }] },
+      { key: "financial", label: "Financial proposal", files: [{ name: "TOTAG_Itemized_Financial_Schedule.pdf", size: 820000, type: "application/pdf" }] },
+      { key: "registration", label: "Business registration", files: [{ name: "Liberia_Business_Registry_Certificate_2026.pdf", size: 1150000, type: "application/pdf" }] },
+      { key: "tax", label: "Current tax clearance", files: [{ name: "LRA_Official_Tax_Clearance_Valid_2026.pdf", size: 940000, type: "application/pdf" }] },
+      { key: "pastWorks", label: "Proof of past works", files: [{ name: "Client_Recommendation_UNDP_Project.pdf", size: 1420000, type: "application/pdf" }, { name: "Completion_Certificate_Civil_Service_Portal.pdf", size: 1350000, type: "application/pdf" }] },
+      { key: "companyProfile", label: "Company profile", files: [{ name: "TOTAG_Corporate_Brochure_And_Governance.pdf", size: 3100000, type: "application/pdf" }] }
+    ]
+  },
+  {
+    id: "LACD-RFQ-2026-007-BID-3810",
+    ref: "LACD/RFQ/2026/007",
+    tenderTitle: "Development of the LACD Website",
+    bidderName: "Kru Coast Digital Solutions",
+    bidderEmail: "tenders@krucoastdigital.lr",
+    bidderPhone: "+231 886 452 918",
+    submittedAt: "04 Sep 2026 · 16:10 GMT",
+    status: "Under Evaluation",
+    totalFiles: 6,
+    evaluationNote: "Technical proposal under review by Procurement Committee panel.",
+    categories: [
+      { key: "technical", label: "Technical proposal", files: [{ name: "KruCoast_Technical_Methodology.pdf", size: 2100000, type: "application/pdf" }] },
+      { key: "financial", label: "Financial proposal", files: [{ name: "KruCoast_Financial_Bid.pdf", size: 650000, type: "application/pdf" }] },
+      { key: "registration", label: "Business registration", files: [{ name: "Business_Registration_2026.pdf", size: 980000, type: "application/pdf" }] },
+      { key: "tax", label: "Current tax clearance", files: [{ name: "Tax_Clearance_Q3_2026.pdf", size: 870000, type: "application/pdf" }] },
+      { key: "pastWorks", label: "Proof of past works", files: [{ name: "Past_Performance_References.pdf", size: 1200000, type: "application/pdf" }] },
+      { key: "companyProfile", label: "Company profile", files: [{ name: "Company_Profile_KruCoast.pdf", size: 1800000, type: "application/pdf" }] }
+    ]
+  },
+  {
+    id: "LACD-RFQ-2026-006-BID-2104",
+    ref: "LACD/RFQ/2026/006",
+    tenderTitle: "Supply and Installation of Community Solar Dryers",
+    bidderName: "Monrovia Solar & Agrotech Enterprise",
+    bidderEmail: "sales@monroviasolar.com",
+    bidderPhone: "+231 770 123 456",
+    submittedAt: "28 Jul 2026 · 09:30 GMT",
+    status: "Awarded",
+    totalFiles: 7,
+    evaluationNote: "Awarded following technical evaluation and PPCC No-Objection clearance.",
+    categories: [
+      { key: "technical", label: "Technical proposal", files: [{ name: "Solar_Dryer_Technical_Specs.pdf", size: 3400000, type: "application/pdf" }] },
+      { key: "financial", label: "Financial proposal", files: [{ name: "Solar_Equipment_Bill_of_Quantities.pdf", size: 950000, type: "application/pdf" }] },
+      { key: "registration", label: "Business registration", files: [{ name: "Monrovia_Solar_Registration.pdf", size: 890000, type: "application/pdf" }] },
+      { key: "tax", label: "Current tax clearance", files: [{ name: "LRA_Clearance_2026.pdf", size: 760000, type: "application/pdf" }] },
+      { key: "pastWorks", label: "Proof of past works", files: [{ name: "Ministry_of_Agriculture_Project_Letter.pdf", size: 1600000, type: "application/pdf" }] },
+      { key: "companyProfile", label: "Company profile", files: [{ name: "Monrovia_Solar_Profile.pdf", size: 2200000, type: "application/pdf" }] }
+    ]
+  }
+];
+
+const starterVaultDonations: VaultDonationRecord[] = [
+  {
+    id: "LACD-DON-2026-1082",
+    donorName: "Kollie Mensah",
+    donorEmail: "kmensah.monrovia@gmail.com",
+    channel: "MTN MoMo",
+    referenceCode: "MOMO-TX-984210",
+    amountUsd: 150,
+    frequency: "one-time",
+    allocatedPillar: "Food Security & Agriculture",
+    date: "02 Sep 2026",
+    status: "Confirmed & Audited",
+    phone: "+231 777 889 900"
+  },
+  {
+    id: "LACD-DON-2026-1083",
+    donorName: "Diaspora Friend of Liberia",
+    donorEmail: "diaspora.advocates@liberianet.org",
+    channel: "Bank Wire Transfer",
+    referenceCode: "UBA-WIRE-872911",
+    amountUsd: 500,
+    frequency: "monthly",
+    allocatedPillar: "Climate & Clean Energy",
+    date: "28 Aug 2026",
+    status: "Confirmed & Audited"
+  },
+  {
+    id: "LACD-DON-2026-1084",
+    donorName: "Sarah J. Teah",
+    donorEmail: "sarah.teah@gmail.com",
+    channel: "Orange Money",
+    referenceCode: "ORG-PAY-441029",
+    amountUsd: 50,
+    frequency: "one-time",
+    allocatedPillar: "Women & Youth",
+    date: "24 Aug 2026",
+    status: "Receipt Issued",
+    phone: "+231 886 112 334"
+  },
+  {
+    id: "LACD-DON-2026-1085",
+    donorName: "Dr. Arthur Freeman",
+    donorEmail: "afreeman.md@healthliberia.org",
+    channel: "Bank Wire Transfer",
+    referenceCode: "ECO-TRF-662914",
+    amountUsd: 250,
+    frequency: "one-time",
+    allocatedPillar: "Health & Nutrition",
+    date: "15 Aug 2026",
+    status: "Confirmed & Audited"
+  }
+];
+
+const starterVaultComplaints: VaultComplaintRecord[] = [
+  {
+    id: "LACD-GRV-2026-041",
+    category: "Safeguarding & Harassment",
+    complainantName: "Confidential Participant (Identity Protected)",
+    complainantContact: "Encrypted via Hotline (+231 777 011 212)",
+    submittedAt: "12 Aug 2026 · 14:20 GMT",
+    severity: "Critical / High",
+    subject: "Inappropriate conduct during field training distribution in Bomi County",
+    details: "Participant reported improper communication and unfair prioritization during vegetable seed distribution. Requested independent investigation and protection.",
+    status: "Case Closed",
+    assignedOfficer: "Safeguarding & Ethics Panel Lead",
+    investigationNotes: [
+      "12 Aug 2026: Grievance logged via confidential hotline and acknowledged within 18 hours.",
+      "16 Aug 2026: Independent gender-balanced panel interviewed field facilitators and community elders.",
+      "22 Aug 2026: Remedial training conducted; distribution lists re-verified; field officer re-assigned; complainant notified of protective outcome."
+    ]
+  },
+  {
+    id: "LACD-GRV-2026-054",
+    category: "Service Delivery Quality",
+    complainantName: "Gbarpolu Farmers Cooperative Representative",
+    complainantContact: "gbarpolufarmers@coop.lr",
+    submittedAt: "25 Aug 2026 · 10:15 GMT",
+    severity: "Medium",
+    subject: "Delayed delivery of secondary nursery mesh for nursery shade",
+    details: "Nursery mesh delivered on 20 Aug was incomplete by 4 rolls, impacting 2 community demonstration beds.",
+    status: "Corrective Action",
+    assignedOfficer: "Agriculture Programme Monitoring Lead",
+    investigationNotes: [
+      "25 Aug 2026: Case logged and delivery manifest reviewed against warehouse dispatch logs.",
+      "27 Aug 2026: Replacement 4 rolls approved and dispatched via regional field vehicle.",
+      "30 Aug 2026: Awaiting final delivery sign-off from cooperative chair."
+    ]
+  },
+  {
+    id: "LACD-GRV-2026-072",
+    category: "Procurement Integrity / Fraud",
+    complainantName: "Anonymous Tender Participant",
+    submittedAt: "01 Sep 2026 · 18:05 GMT",
+    severity: "Medium",
+    subject: "Inquiry regarding clarification deadline for RFQ-2026-006",
+    details: "Vendor requested review of clarification response time regarding equipment warranty clause 3.2.",
+    status: "Independent Panel Review",
+    assignedOfficer: "PPCC Compliance Officer",
+    investigationNotes: [
+      "02 Sep 2026: Clarification log reviewed; response was issued publicly within 48h to all registered bidders.",
+      "04 Sep 2026: Ethics desk drafting formal closing memorandum."
+    ]
+  }
+];
+
+const starterVaultInstitutional: VaultInstitutionalRecord[] = [
+  {
+    id: "LACD-GOV-2026-RES-01",
+    title: "Board of Directors Resolution on 2026–2030 Strategic Framework",
+    category: "Board Resolution",
+    year: "2026",
+    referenceNo: "BOD/RES/2026/01",
+    signatory: "Board Chair & Executive Director",
+    classification: "Executive Confidential",
+    summary: "Formal board approval of institutional priorities, fiduciary delegation limits, and strategic programme allocations.",
+    fileSize: "1.8 MB"
+  },
+  {
+    id: "LACD-AUD-2025-EXT-04",
+    title: "Independent External Financial Audit Report FY2025",
+    category: "Statutory Audit",
+    year: "2025",
+    referenceNo: "AUD/EXT/2025/04",
+    signatory: "Certified Public Accountants (Monrovia)",
+    classification: "Public Archive",
+    summary: "Comprehensive external audit report confirming unqualified (clean) opinion on all LACD receipts, expenditures and grant balances.",
+    fileSize: "4.2 MB"
+  },
+  {
+    id: "LACD-PPCC-2026-CLR-12",
+    title: "PPCC Annual Procurement Compliance Certificate",
+    category: "PPCC Clearance",
+    year: "2026",
+    referenceNo: "PPCC/CLR/2026/12",
+    signatory: "Executive Director, PPCC Liberia",
+    classification: "Public Archive",
+    summary: "Official certification of LACD procurement thresholds, evaluation panel structures, and electronic notice compliance.",
+    fileSize: "1.1 MB"
+  },
+  {
+    id: "LACD-MOU-2025-UNDP-02",
+    title: "Partnership Memorandum with United Nations Development Programme",
+    category: "MOU & Partnership",
+    year: "2025",
+    referenceNo: "MOU/UNDP/2025/02",
+    signatory: "Resident Representative & LACD Executive Director",
+    classification: "Internal Operational",
+    summary: "Institutional partnership terms for decentralized community climate adaptation and youth solar skills in Bomi and Margibi counties.",
+    fileSize: "2.6 MB"
+  }
+];
+
 
 const starterContent: ContentItem[] = [
   { id: 1, type: "News", title: "Community-led planning strengthens local ownership", date: "28 July 2026", summary: "LACD convened community representatives to review priorities, implementation responsibilities and local accountability mechanisms.", category:"Governance", author:"LACD Communications Unit", body:"Community representatives, programme teams and local leaders reviewed shared priorities and agreed practical accountability measures. The process places community knowledge at the centre of planning, implementation and learning.", image:"/activities/lacd-community-distribution.png" },
@@ -625,6 +959,17 @@ export default function Home() {
   const [carouselPaused, setCarouselPaused] = useState(false);
   const [carouselProgress, setCarouselProgress] = useState(0);
 
+  // Enterprise Document Vault States (with strict RBAC)
+  const [vaultRole, setVaultRole] = useState<VaultRole>("public");
+  const [vaultTab, setVaultTab] = useState<VaultModuleId>("procurement");
+  const [vaultAuthModalOpen, setVaultAuthModalOpen] = useState(false);
+  const [vaultBids, setVaultBids] = useState<VaultBidRecord[]>(starterVaultBids);
+  const [vaultDonations, setVaultDonations] = useState<VaultDonationRecord[]>(starterVaultDonations);
+  const [vaultComplaints, setVaultComplaints] = useState<VaultComplaintRecord[]>(starterVaultComplaints);
+  const [vaultInstitutional, setVaultInstitutional] = useState<VaultInstitutionalRecord[]>(starterVaultInstitutional);
+  const [selectedBidDossier, setSelectedBidDossier] = useState<VaultBidRecord | null>(null);
+  const [grievanceModalOpen, setGrievanceModalOpen] = useState(false);
+
   const alert = (text: string, type: "success" | "info" = "success") => {
     setNotice({ text, type });
     window.setTimeout(() => setNotice(null), 4200);
@@ -639,7 +984,7 @@ export default function Home() {
   useEffect(() => {
     const syncHash = () => {
       const route = window.location.hash.replace("#", "") as View;
-      const allowed: View[] = ["home","about","vision","strategy","programmes","programme-detail","projects","news","stories","careers","events","content-detail","gallery","partners","resources","procurement","contact","donate","privacy","terms","search","admin"];
+      const allowed: View[] = ["home","about","vision","strategy","programmes","programme-detail","projects","news","stories","careers","events","content-detail","gallery","partners","resources","procurement","contact","donate","vault","privacy","terms","search","admin"];
       if (allowed.includes(route)) setView(route);
     };
     syncHash();
@@ -732,6 +1077,11 @@ export default function Home() {
             }));
           }
           if (state.receipt) setReceipt(state.receipt);
+          if (state.vaultBids) setVaultBids(state.vaultBids);
+          if (state.vaultDonations) setVaultDonations(state.vaultDonations);
+          if (state.vaultComplaints) setVaultComplaints(state.vaultComplaints);
+          if (state.vaultRole) setVaultRole(state.vaultRole);
+          if (state.vaultTab) setVaultTab(state.vaultTab);
         }
       }
     } catch (e) {
@@ -754,7 +1104,7 @@ export default function Home() {
         files: cleanFiles,
       };
     });
-    const state = { resources, contentItems, subscribers, cmsUsers, opportunities, clarifications, adminLog, carouselActivities, programmes, websiteRecords, richContent, bidder, bidderEmail, bidderSpecialties, bidderCredentialFiles: serializableCredentials, credentialExpiry, bidderProfileComplete, attachments: serializableAttachments, receipt };
+    const state = { resources, contentItems, subscribers, cmsUsers, opportunities, clarifications, adminLog, carouselActivities, programmes, websiteRecords, richContent, bidder, bidderEmail, bidderSpecialties, bidderCredentialFiles: serializableCredentials, credentialExpiry, bidderProfileComplete, attachments: serializableAttachments, receipt, vaultBids, vaultDonations, vaultComplaints, vaultRole, vaultTab };
     persistenceTimer.current = setTimeout(() => {
       try {
         if (typeof window !== "undefined") {
@@ -765,7 +1115,7 @@ export default function Home() {
       }
     }, 500);
     return () => { if (persistenceTimer.current) clearTimeout(persistenceTimer.current); };
-  }, [resources,contentItems,subscribers,cmsUsers,opportunities,clarifications,adminLog,carouselActivities,programmes,websiteRecords,richContent,bidder,bidderEmail,bidderSpecialties,bidderCredentialFiles,credentialExpiry,bidderProfileComplete,attachments,receipt]);
+  }, [resources,contentItems,subscribers,cmsUsers,opportunities,clarifications,adminLog,carouselActivities,programmes,websiteRecords,richContent,bidder,bidderEmail,bidderSpecialties,bidderCredentialFiles,credentialExpiry,bidderProfileComplete,attachments,receipt,vaultBids,vaultDonations,vaultComplaints,vaultRole,vaultTab]);
 
   useEffect(() => {
     if (view !== "home") return;
@@ -994,10 +1344,34 @@ export default function Home() {
     const missing = attachments.filter((a) => a.required && (!a.files || a.files.length === 0) && !a.file);
     if (missing.length) return alert(`Complete ${missing.length} required attachment categor${missing.length > 1 ? "ies" : "y"} before submission.`, "info");
     if (!declaration) return alert("Confirm the bidder declaration before submission.", "info");
-    const code = `LACD-DEMO-${new Date().getFullYear()}-${String(Math.floor(Math.random() * 9000) + 1000)}`;
+    const code = `LACD-BID-${new Date().getFullYear()}-${String(Math.floor(Math.random() * 9000) + 1000)}`;
     setReceipt(code);
     const totalFiles = attachments.reduce((acc, a) => acc + (a.files?.length || (a.file ? 1 : 0)), 0);
-    alert(`Proposal submitted with ${totalFiles} attached document${totalFiles === 1 ? "" : "s"}. Receipt ${code} generated.`);
+
+    const newBidRecord: VaultBidRecord = {
+      id: code,
+      ref: selectedTender.ref,
+      tenderTitle: selectedTender.title,
+      bidderName: bidder || "TOTAG IT Services Liberia Ltd.",
+      bidderEmail: bidderEmail || "info@totagits.com",
+      bidderPhone: "+231 777 000 111",
+      submittedAt: new Date().toLocaleDateString("en-GB", { day: "numeric", month: "short", year: "numeric", hour: "2-digit", minute: "2-digit" }),
+      status: "Pending Opening",
+      categories: attachments.map(a => ({
+        key: a.key,
+        label: a.label,
+        files: (a.files && a.files.length > 0 ? a.files : (a.file ? [a.file] : [])).map(f => ({
+          name: f.name,
+          size: f.size,
+          type: f.type,
+          category: a.label
+        }))
+      })),
+      totalFiles: totalFiles,
+      evaluationNote: "Newly submitted bid awaiting official tender opening committee session."
+    };
+    setVaultBids(prev => [newBidRecord, ...prev]);
+    alert(`Proposal submitted with ${totalFiles} attached document${totalFiles === 1 ? "" : "s"}. Receipt ${code} generated and archived in the Procurement Document Vault.`);
   };
 
   const sendClarification = (e: FormEvent) => {
@@ -1071,11 +1445,12 @@ export default function Home() {
           <button onClick={() => navigate("resources")}>Public information</button>
           <button onClick={() => navigate("procurement")}>Procurement</button>
           <button onClick={() => navigate("contact")}>Contact</button>
+          <button className={`nav-vault-pill ${view==="vault"?"active":""}`} onClick={() => navigate("vault")}>Vault 🔒</button>
           <button className={`nav-donate-pill ${view==="donate"?"active":""}`} onClick={() => navigate("donate")}>♥ Donate</button>
         </nav>
         <form className="header-search" onSubmit={(e) => { e.preventDefault(); if (siteQuery.trim()) navigate("search"); }}><label><span className="sr-only">Search the LACD website</span><input value={siteQuery} onChange={(e) => setSiteQuery(e.target.value)} placeholder="Search" /></label><button aria-label="Search">⌕</button></form>
         <button className="nav-cta" onClick={() => staffLoggedIn ? navigate("admin") : setLoginOpen(true)}>{staffLoggedIn ? "Dashboard" : "Staff sign in"}</button>
-        <details className="mobile-menu"><summary>Menu</summary><div>{[{v:"home",t:"Home"},{v:"about",t:"About LACD"},{v:"vision",t:"Vision & mission"},{v:"strategy",t:"Strategic Plan"},{v:"programmes",t:"Programmes"},{v:"projects",t:"Projects"},{v:"donate",t:"♥ Donate / Support"},{v:"news",t:"News & stories"},{v:"careers",t:"Careers"},{v:"events",t:"Events"},{v:"gallery",t:"Gallery"},{v:"resources",t:"Public information"},{v:"procurement",t:"Procurement"},{v:"contact",t:"Contact"}].map(x=><button key={x.v} onClick={()=>navigate(x.v as View)}>{x.t}</button>)}</div></details>
+        <details className="mobile-menu"><summary>Menu</summary><div>{[{v:"home",t:"Home"},{v:"about",t:"About LACD"},{v:"vision",t:"Vision & mission"},{v:"strategy",t:"Strategic Plan"},{v:"programmes",t:"Programmes"},{v:"projects",t:"Projects"},{v:"vault",t:"Document Vault 🔒 (RBAC)"},{v:"donate",t:"♥ Donate / Support"},{v:"news",t:"News & stories"},{v:"careers",t:"Careers"},{v:"events",t:"Events"},{v:"gallery",t:"Gallery"},{v:"resources",t:"Public information"},{v:"procurement",t:"Procurement"},{v:"contact",t:"Contact"}].map(x=><button key={x.v} onClick={()=>navigate(x.v as View)}>{x.t}</button>)}</div></details>
       </header>
       {loginOpen && <div className="login-overlay" role="dialog" aria-modal="true" aria-label="LACD staff sign in"><form className="login-card" onSubmit={e=>{e.preventDefault();setStaffLoggedIn(true);setLoginOpen(false);setAdminPanel(rolePanels[staffRole][0]);navigate("admin");alert(`Signed in as ${staffRole}. Your dashboard shows only authorized tools.`)}}><button type="button" className="login-close" onClick={()=>setLoginOpen(false)}>Close ×</button><img src={asset("/lacd-logo.jpg")} alt="LACD" /><p className="eyebrow">Secure staff portal demonstration</p><h2>Sign in to your workspace</h2><label>Demo role<select value={staffRole} onChange={e=>setStaffRole(e.target.value as StaffRole)}><option>Administrator</option><option>Content Editor</option><option>Programme Author</option><option>Procurement Publisher</option><option>Analytics Viewer</option></select></label><label>Email address<input required type="email" defaultValue="admin@lacd.demo" /></label><label>Password<input required type="password" defaultValue="Demo@2026" /></label><button className="button primary">Sign in and open dashboard →</button><small>Evaluator sandbox: select any role to inspect its role-based access. Production authentication will use LACD-approved identity controls.</small></form></div>}
 
@@ -1395,10 +1770,74 @@ export default function Home() {
       </Page>}
 
       {view === "contact" && <Page title="Contact, feedback and safeguarding" eyebrow="Talk with LACD" intro="Use the appropriate channel for general enquiries, programme feedback, partnership requests or confidential safeguarding concerns.">
-        <div className="contact-grid"><article className="contact-card"><p className="eyebrow">Contact information</p><h2>Let’s connect.</h2><p className="contact-intro">Our team will route your message to the appropriate LACD unit and acknowledge receipt.</p><div className="contact-detail"><span>⌖</span><div><small>Visit our office</small><b>Chugbor Road, Old Road<br/>Monrovia, Liberia</b></div></div><div className="contact-detail"><span>☎</span><div><small>Call us</small><a href="tel:+231777011212">+231 777 011 212</a></div></div><div className="contact-detail"><span>✉</span><div><small>Official emails</small><a href="mailto:lacommunitydevelopment1@gmail.com">lacommunitydevelopment1@gmail.com</a><a href="mailto:emmanuelpaye1978@gmail.com" style={{marginTop:"4px"}}>emmanuelpaye1978@gmail.com</a></div></div><button className="contact-download" onClick={() => downloadDemo("LACD contact information", "Liberia Agency for Community Development\nChugbor Road, Old Road, Monrovia, Liberia\nPhone: +231 777 011 212\nEmails: lacommunitydevelopment1@gmail.com / emmanuelpaye1978@gmail.com")}>Download contact card ↓</button><div className="social-row"><a target="_blank" rel="noreferrer" href="https://www.facebook.com/p/Liberia-Agency-For-Community-Development-100054497019309/">Facebook ↗</a><a target="_blank" rel="noreferrer" href="https://www.linkedin.com/sharing/share-offsite/?url=https%3A%2F%2Flacd-concept-demo.mgwoah.chatgpt.site">LinkedIn ↗</a></div></article><form className="contact-form" onSubmit={(e) => { e.preventDefault(); (e.currentTarget as HTMLFormElement).reset(); alert("Enquiry LACD-DEMO-1048 received. A confirmation has been sent to your email."); }}><div className="form-heading"><p className="eyebrow">Send a message</p><h2>How can LACD help?</h2><p>Fields marked with * are required. You may also contact executive management directly via <b>emmanuelpaye1978@gmail.com</b>.</p></div><label>Enquiry type *<select required><option value="">Select a channel</option><option>General enquiry</option><option>Programme feedback</option><option>Partnership request</option><option>Media enquiry</option><option>Safeguarding concern</option></select></label><label>Full name *<input required placeholder="Your full name" /></label><label>Email address *<input required type="email" placeholder="name@example.com" /></label><label>Phone number<input placeholder="+231 ..." /></label><label className="contact-subject">Subject *<input required placeholder="Briefly describe your enquiry" /></label><label className="contact-message">Message *<textarea required placeholder="Provide the details needed for LACD to respond." /></label><label className="declaration"><input type="checkbox" required /><span>I consent to LACD processing this enquiry in accordance with its Privacy Policy.</span></label><button className="button primary">Send enquiry securely →</button></form></div><div className="map-card"><iframe title="LACD location map" loading="lazy" src="https://www.google.com/maps?q=Chugbor%20Road%2C%20Old%20Road%2C%20Monrovia%2C%20Liberia&output=embed" /><div><p className="eyebrow">Find LACD</p><h2>Chugbor Road, Old Road, Monrovia.</h2><p>Use the interactive map to pan, zoom and open directions. Exact production pin placement will be confirmed by LACD.</p><a href="https://www.google.com/maps/search/Chugbor+Road+Old+Road+Monrovia+Liberia" target="_blank" rel="noreferrer">Open directions in Google Maps →</a></div></div>
+        <div className="contact-grid"><article className="contact-card"><p className="eyebrow">Contact information</p><h2>Let’s connect.</h2><p className="contact-intro">Our team will route your message to the appropriate LACD unit and acknowledge receipt.</p><div className="contact-detail"><span>⌖</span><div><small>Visit our office</small><b>Chugbor Road, Old Road<br/>Monrovia, Liberia</b></div></div><div className="contact-detail"><span>☎</span><div><small>Call us</small><a href="tel:+231777011212">+231 777 011 212</a></div></div><div className="contact-detail"><span>✉</span><div><small>Official emails</small><a href="mailto:lacommunitydevelopment1@gmail.com">lacommunitydevelopment1@gmail.com</a><a href="mailto:emmanuelpaye1978@gmail.com" style={{marginTop:"4px"}}>emmanuelpaye1978@gmail.com</a></div></div><button className="contact-download" onClick={() => downloadDemo("LACD contact information", "Liberia Agency for Community Development\nChugbor Road, Old Road, Monrovia, Liberia\nPhone: +231 777 011 212\nEmails: lacommunitydevelopment1@gmail.com / emmanuelpaye1978@gmail.com")}>Download contact card ↓</button><div className="social-row"><a target="_blank" rel="noreferrer" href="https://www.facebook.com/p/Liberia-Agency-For-Community-Development-100054497019309/">Facebook ↗</a><a target="_blank" rel="noreferrer" href="https://www.linkedin.com/sharing/share-offsite/?url=https%3A%2F%2Flacd-concept-demo.mgwoah.chatgpt.site">LinkedIn ↗</a></div></article><form className="contact-form" onSubmit={(e) => {
+          e.preventDefault();
+          const form = e.currentTarget;
+          const formData = new FormData(form);
+          const channel = (form.elements[0] as HTMLSelectElement).value;
+          const name = (form.elements[1] as HTMLInputElement).value;
+          const email = (form.elements[2] as HTMLInputElement).value;
+          const phone = (form.elements[3] as HTMLInputElement).value;
+          const subject = (form.elements[4] as HTMLInputElement).value;
+          const message = (form.elements[5] as HTMLTextAreaElement).value;
+          form.reset();
+
+          if (channel === "Safeguarding concern" || channel === "Programme feedback") {
+            const ticketId = `LACD-GRV-${new Date().getFullYear()}-${String(Math.floor(Math.random() * 900) + 100)}`;
+            const newGrievance: VaultComplaintRecord = {
+              id: ticketId,
+              category: channel === "Safeguarding concern" ? "Safeguarding & Harassment" : "Service Delivery Quality",
+              complainantName: name || "Confidential Community Member",
+              complainantContact: email || phone || "Protected Channel",
+              submittedAt: new Date().toLocaleDateString("en-GB", { day: "numeric", month: "short", year: "numeric", hour: "2-digit", minute: "2-digit" }),
+              severity: channel === "Safeguarding concern" ? "Critical / High" : "Medium",
+              subject: subject || "Community Grievance",
+              details: message,
+              status: "Received & Acknowledged",
+              assignedOfficer: "Safeguarding & Ethics Focal Point",
+              investigationNotes: [
+                `${new Date().toLocaleDateString("en-GB")}: Confidential grievance logged via portal and registered into the Safeguarding Document Vault. Case review initiated under 48h protocol.`
+              ]
+            };
+            setVaultComplaints(prev => [newGrievance, ...prev]);
+            alert(`Safeguarding grievance ${ticketId} registered in the confidential Document Vault. Acknowledged under 48h protocol.`);
+          } else {
+            alert("Enquiry LACD-DEMO-1048 received. A confirmation has been sent to your email.");
+          }
+        }}><div className="form-heading"><p className="eyebrow">Send a message</p><h2>How can LACD help?</h2><p>Fields marked with * are required. You may also contact executive management directly via <b>emmanuelpaye1978@gmail.com</b>.</p></div><label>Enquiry type *<select required><option value="">Select a channel</option><option>General enquiry</option><option>Programme feedback</option><option>Partnership request</option><option>Media enquiry</option><option>Safeguarding concern</option></select></label><label>Full name *<input required placeholder="Your full name" /></label><label>Email address *<input required type="email" placeholder="name@example.com" /></label><label>Phone number<input placeholder="+231 ..." /></label><label className="contact-subject">Subject *<input required placeholder="Briefly describe your enquiry" /></label><label className="contact-message">Message *<textarea required placeholder="Provide the details needed for LACD to respond." /></label><label className="declaration"><input type="checkbox" required /><span>I consent to LACD processing this enquiry in accordance with its Privacy Policy.</span></label><button className="button primary">Send enquiry securely →</button></form></div><div className="map-card"><iframe title="LACD location map" loading="lazy" src="https://www.google.com/maps?q=Chugbor%20Road%2C%20Old%20Road%2C%20Monrovia%2C%20Liberia&output=embed" /><div><p className="eyebrow">Find LACD</p><h2>Chugbor Road, Old Road, Monrovia.</h2><p>Use the interactive map to pan, zoom and open directions. Exact production pin placement will be confirmed by LACD.</p><a href="https://www.google.com/maps/search/Chugbor+Road+Old+Road+Monrovia+Liberia" target="_blank" rel="noreferrer">Open directions in Google Maps →</a></div></div>
       </Page>}
 
-      {view === "donate" && <DonatePage alert={alert} navigate={navigate} />}
+      {view === "donate" && (
+        <DonatePage 
+          alert={alert} 
+          navigate={navigate} 
+          onRecordDonation={(donation) => setVaultDonations(prev => [donation, ...prev])} 
+        />
+      )}
+
+      {view === "vault" && (
+        <DocumentVaultPage
+          role={vaultRole}
+          setRole={setVaultRole}
+          tab={vaultTab}
+          setTab={setVaultTab}
+          bids={vaultBids}
+          setBids={setVaultBids}
+          donations={vaultDonations}
+          setDonations={setVaultDonations}
+          complaints={vaultComplaints}
+          setComplaints={setVaultComplaints}
+          institutional={vaultInstitutional}
+          selectedDossier={selectedBidDossier}
+          setSelectedDossier={setSelectedBidDossier}
+          isAuthModalOpen={vaultAuthModalOpen}
+          setIsAuthModalOpen={setVaultAuthModalOpen}
+          grievanceModalOpen={grievanceModalOpen}
+          setGrievanceModalOpen={setGrievanceModalOpen}
+          alert={alert}
+          navigate={navigate}
+        />
+      )}
 
       {view === "admin" && !staffLoggedIn && <Page title="Staff portal" eyebrow="Authentication required" intro="Sign in to open a role-based dashboard with only the tools assigned to your account."><div className="signin-required"><span>⌾</span><h2>Protected staff workspace</h2><p>The public website remains available without an account. Content, media, user, analytics and maintenance tools require staff authentication.</p><button className="button primary" onClick={()=>setLoginOpen(true)}>Open staff sign in →</button></div></Page>}
 
@@ -1434,7 +1873,7 @@ export default function Home() {
       <footer>
         <div className="footer-brand"><img src={asset("/lacd-logo.jpg")} alt="" /><div><b>Liberia Agency for<br />Community Development</b><p>Local agency. Shared progress.</p></div></div>
         <div><h3>Explore LACD</h3><button onClick={() => navigate("about")}>About LACD</button><button onClick={() => navigate("vision")}>Vision, Mission & Values</button><button onClick={() => navigate("strategy")}>Strategic Plan</button><button onClick={() => navigate("news")}>News & Updates</button><button onClick={() => navigate("stories")}>Success Stories</button><button onClick={() => navigate("careers")}>Careers</button><button onClick={() => navigate("events")}>Events Calendar</button><button onClick={() => navigate("gallery")}>Gallery</button><button onClick={() => navigate("partners")}>Partners & donors</button><button onClick={() => navigate("donate")}>♥ Donate & Support</button></div>
-        <div><h3>Transparency</h3><button onClick={() => navigate("resources")}>Public information</button><button onClick={() => navigate("procurement")}>Procurement opportunities</button><button onClick={() => navigate("projects")}>Project results</button><button onClick={() => navigate("contact")}>Contact & feedback</button><button onClick={() => navigate("privacy")}>Privacy Policy</button><button onClick={() => navigate("terms")}>Terms of Use</button><button onClick={() => navigate("admin")}>CMS test centre</button></div>
+        <div><h3>Transparency & Audit</h3><button onClick={() => navigate("vault")}>Document Vault (RBAC) 🔒</button><button onClick={() => navigate("resources")}>Public information</button><button onClick={() => navigate("procurement")}>Procurement opportunities</button><button onClick={() => navigate("projects")}>Project results</button><button onClick={() => navigate("contact")}>Contact & feedback</button><button onClick={() => navigate("privacy")}>Privacy Policy</button><button onClick={() => navigate("terms")}>Terms of Use</button><button onClick={() => navigate("admin")}>CMS test centre</button></div>
         <div className="footer-bottom"><span>Interactive concept demonstration prepared by TOTAG IT Services for RFQ evaluation.</span><span>Contact: emmanuelpaye1978@gmail.com · lacommunitydevelopment1@gmail.com</span><span>Responsive · Accessible · Secure-by-design</span></div>
       </footer>
     </main>
@@ -1724,7 +2163,15 @@ function AnalyticsDashboard() {return <div className="analytics-grid">{[["12,480
 
 function BackupManager({log,setLog,alert}:{log:string[];setLog:React.Dispatch<React.SetStateAction<string[]>>;alert:(text:string,type?:"success"|"info")=>void}) {const [backups,setBackups]=useState([{id:1,date:"Today · 02:00 GMT",type:"Scheduled",status:"Verified"},{id:2,date:"30 Jul 2026 · 02:00 GMT",type:"Scheduled",status:"Verified"},{id:3,date:"28 Jul 2026 · 16:42 GMT",type:"Pre-update",status:"Verified"}]);return <section className="manager-layout"><div className="module-panel"><p className="eyebrow">Security status</p><h2>Protected and maintained</h2>{["SSL certificate active","Daily encrypted backups","Malware and file-integrity monitoring","CMS security updates current","Monthly restore test scheduled"].map(x=><p className="security-line" key={x}><span>✓</span>{x}</p>)}<button className="button primary" onClick={()=>{setBackups(x=>[{id:Date.now(),date:"Just now",type:"Manual",status:"Verified"},...x]);setLog(x=>["Manual backup created and verified",...x]);alert("Backup created and integrity verified.")}}>Create backup now</button></div><div className="record-table"><h2>Restore points & maintenance</h2>{backups.map(b=><article key={b.id}><span className="user-active">{b.status}</span><div><b>{b.date}</b><small>{b.type} backup · encrypted off-site copy</small></div><button onClick={()=>alert(`Restore simulation completed for ${b.date}. No live data was changed.`)}>Test restore</button></article>)}<h3>Maintenance history</h3>{log.slice(0,4).map(x=><p key={x}>{x}</p>)}</div></section>}
 
-function DonatePage({alert, navigate}:{alert:(text:string,type?:"success"|"info")=>void; navigate:(view:View)=>void}) {
+function DonatePage({
+  alert, 
+  navigate,
+  onRecordDonation
+}:{
+  alert:(text:string,type?:"success"|"info")=>void; 
+  navigate:(view:View)=>void;
+  onRecordDonation?: (donation: VaultDonationRecord) => void;
+}) {
   const [frequency, setFrequency] = useState<"one-time"|"monthly">("one-time");
   const [amount, setAmount] = useState<number|string>(50);
   const [customAmount, setCustomAmount] = useState("");
@@ -1749,7 +2196,23 @@ function DonatePage({alert, navigate}:{alert:(text:string,type?:"success"|"info"
       return alert("Please specify a valid donation amount.", "info");
     }
     setSubmitted(true);
-    alert(`Thank you, ${donorName || "Supporter"}! Your pledge of $${finalAmount} (${frequency}) has been recorded.`);
+    const code = `LACD-DON-${new Date().getFullYear()}-${String(Math.floor(Math.random() * 9000) + 1000)}`;
+    if (onRecordDonation) {
+      onRecordDonation({
+        id: code,
+        donorName: donorName.trim() || "Anonymous Diaspora Contributor",
+        donorEmail: donorEmail.trim() || "donor@community.org",
+        channel: paymentMethod === "momo" ? "MTN MoMo" : paymentMethod === "bank" ? "Bank Wire Transfer" : "Card / Gateway",
+        referenceCode: paymentMethod === "momo" ? `MOMO-${Date.now().toString().slice(-6)}` : `WIRE-${Date.now().toString().slice(-6)}`,
+        amountUsd: Number(finalAmount),
+        frequency: frequency,
+        allocatedPillar: cause,
+        date: new Date().toLocaleDateString("en-GB", { day: "numeric", month: "short", year: "numeric" }),
+        status: "Pledged",
+        phone: donorPhone.trim() || undefined
+      });
+    }
+    alert(`Thank you, ${donorName || "Supporter"}! Your pledge of $${finalAmount} (${frequency}) has been recorded in the Donation Vault.`);
   };
 
   return (
@@ -1964,3 +2427,1629 @@ function DonatePage({alert, navigate}:{alert:(text:string,type?:"success"|"info"
     </Page>
   );
 }
+
+// ============================================================================
+// ENTERPRISE DOCUMENT VAULT & RBAC GOVERNANCE MODULES
+// ============================================================================
+
+function exportToCsv(filename: string, rows: string[][]) {
+  const processRow = (row: string[]) => row.map(val => {
+    let text = (val || "").toString().replace(/"/g, '""');
+    if (text.search(/("|,|\n)/g) >= 0) text = `"${text}"`;
+    return text;
+  }).join(",");
+
+  const csvContent = "data:text/csv;charset=utf-8," + rows.map(processRow).join("\n");
+  const encodedUri = encodeURI(csvContent);
+  const link = document.createElement("a");
+  link.setAttribute("href", encodedUri);
+  link.setAttribute("download", filename);
+  document.body.appendChild(link);
+  link.click();
+  document.body.removeChild(link);
+}
+
+function downloadVaultFile(fileName: string, category: string, bidderName: string) {
+  const doc = new jsPDF();
+  doc.setFillColor(18, 63, 42);
+  doc.rect(0, 0, 210, 26, "F");
+  doc.setTextColor(255, 255, 255);
+  doc.setFont("helvetica", "bold");
+  doc.setFontSize(13);
+  doc.text("LIBERIA AGENCY FOR COMMUNITY DEVELOPMENT", 18, 14);
+  doc.setFontSize(8.5);
+  doc.setFont("helvetica", "normal");
+  doc.text("DOCUMENT VAULT · VERIFIED PROCUREMENT ATTACHMENT ARCHIVE", 18, 20);
+
+  doc.setTextColor(18, 63, 42);
+  doc.setFontSize(15);
+  doc.setFont("helvetica", "bold");
+  doc.text(fileName, 18, 42);
+
+  doc.setTextColor(70, 80, 75);
+  doc.setFontSize(10);
+  doc.setFont("helvetica", "normal");
+  doc.text(`Category: ${category}`, 18, 52);
+  doc.text(`Submitted By: ${bidderName}`, 18, 60);
+  doc.text(`Verification Timestamp: ${new Date().toUTCString()}`, 18, 68);
+  doc.text(`Checksum SHA-256: 8f4a39b2e04d7c18a901ff28c... [VERIFIED INTEGRITY]`, 18, 76);
+
+  doc.setDrawColor(210, 220, 215);
+  doc.line(18, 84, 192, 84);
+
+  doc.setFontSize(9.5);
+  doc.text("This official procurement document was archived electronically upon bidder submission.", 18, 96);
+  doc.text("It has been scanned for malware, validated for format compliance, and sealed in the LACD Document Vault.", 18, 104);
+  doc.text("Access is restricted to authorized Procurement Officers and Evaluation Committee members under PPCC rules.", 18, 112);
+
+  doc.save(fileName.endsWith(".pdf") ? fileName : `${fileName}.pdf`);
+}
+
+function downloadDonationReceipt(donation: VaultDonationRecord) {
+  const doc = new jsPDF();
+  doc.setFillColor(18, 63, 42);
+  doc.rect(0, 0, 210, 28, "F");
+  doc.setTextColor(255, 255, 255);
+  doc.setFont("helvetica", "bold");
+  doc.setFontSize(14);
+  doc.text("LIBERIA AGENCY FOR COMMUNITY DEVELOPMENT (LACD)", 18, 14);
+  doc.setFontSize(8.5);
+  doc.setFont("helvetica", "normal");
+  doc.text("OFFICIAL CHARITABLE CONTRIBUTION & DONATION RECEIPT", 18, 22);
+
+  doc.setTextColor(18, 63, 42);
+  doc.setFontSize(18);
+  doc.setFont("helvetica", "bold");
+  doc.text(`RECEIPT: ${donation.id}`, 18, 44);
+
+  doc.setTextColor(60, 70, 65);
+  doc.setFontSize(10);
+  doc.setFont("helvetica", "normal");
+  doc.text(`Date of Contribution: ${donation.date}`, 18, 56);
+  doc.text(`Donor Name: ${donation.donorName}`, 18, 64);
+  doc.text(`Donor Email: ${donation.donorEmail}`, 18, 72);
+  doc.text(`Payment Channel: ${donation.channel}`, 18, 80);
+  doc.text(`Transaction Reference: ${donation.referenceCode}`, 18, 88);
+  doc.text(`Programme Allocation: ${donation.allocatedPillar}`, 18, 96);
+  doc.text(`Contribution Amount: $${donation.amountUsd.toFixed(2)} USD (${donation.frequency})`, 18, 104);
+  doc.text(`Status: ${donation.status}`, 18, 112);
+
+  doc.setDrawColor(210, 220, 215);
+  doc.line(18, 122, 192, 122);
+  doc.setFontSize(9);
+  doc.text("Thank you for partnering with the Liberia Agency for Community Development.", 18, 132);
+  doc.text("LACD is a registered Liberian NGO (Est. 2013). This receipt serves as official proof of charitable support.", 18, 140);
+  doc.text("Chugbor Road, Old Road, Monrovia, Liberia · Tel: +231 777 011 212 · emmanuelpaye1978@gmail.com", 18, 148);
+
+  doc.save(`${donation.id}-Official-Receipt.pdf`);
+}
+
+function downloadInstitutionalDoc(docItem: VaultInstitutionalRecord) {
+  const doc = new jsPDF();
+  doc.setFillColor(18, 63, 42);
+  doc.rect(0, 0, 210, 28, "F");
+  doc.setTextColor(255, 255, 255);
+  doc.setFont("helvetica", "bold");
+  doc.setFontSize(13);
+  doc.text("LIBERIA AGENCY FOR COMMUNITY DEVELOPMENT", 18, 14);
+  doc.setFontSize(8.5);
+  doc.setFont("helvetica", "normal");
+  doc.text(`INSTITUTIONAL GOVERNANCE ARCHIVE · ${docItem.category.toUpperCase()}`, 18, 22);
+
+  doc.setTextColor(18, 63, 42);
+  doc.setFontSize(15);
+  doc.setFont("helvetica", "bold");
+  doc.text(docItem.title, 18, 44);
+
+  doc.setTextColor(60, 70, 65);
+  doc.setFontSize(10);
+  doc.setFont("helvetica", "normal");
+  doc.text(`Reference No: ${docItem.referenceNo}`, 18, 56);
+  doc.text(`Reporting Year: ${docItem.year}`, 18, 64);
+  doc.text(`Classification: ${docItem.classification}`, 18, 72);
+  doc.text(`Authorized Signatory: ${docItem.signatory}`, 18, 80);
+
+  doc.setDrawColor(210, 220, 215);
+  doc.line(18, 90, 192, 90);
+  doc.setFontSize(9.5);
+  const lines = doc.splitTextToSize(docItem.summary, 174);
+  doc.text(lines, 18, 102);
+
+  doc.save(`${docItem.referenceNo.replace(/[^a-z0-9]+/gi, "-")}.pdf`);
+}
+
+function DocumentVaultPage({
+  role,
+  setRole,
+  tab,
+  setTab,
+  bids,
+  setBids,
+  donations,
+  setDonations,
+  complaints,
+  setComplaints,
+  institutional,
+  selectedDossier,
+  setSelectedDossier,
+  isAuthModalOpen,
+  setIsAuthModalOpen,
+  grievanceModalOpen,
+  setGrievanceModalOpen,
+  alert,
+  navigate,
+}: {
+  role: VaultRole;
+  setRole: (role: VaultRole) => void;
+  tab: VaultModuleId;
+  setTab: (tab: VaultModuleId) => void;
+  bids: VaultBidRecord[];
+  setBids: React.Dispatch<React.SetStateAction<VaultBidRecord[]>>;
+  donations: VaultDonationRecord[];
+  setDonations: React.Dispatch<React.SetStateAction<VaultDonationRecord[]>>;
+  complaints: VaultComplaintRecord[];
+  setComplaints: React.Dispatch<React.SetStateAction<VaultComplaintRecord[]>>;
+  institutional: VaultInstitutionalRecord[];
+  selectedDossier: VaultBidRecord | null;
+  setSelectedDossier: (bid: VaultBidRecord | null) => void;
+  isAuthModalOpen: boolean;
+  setIsAuthModalOpen: (open: boolean) => void;
+  grievanceModalOpen: boolean;
+  setGrievanceModalOpen: (open: boolean) => void;
+  alert: (text: string, type?: "success" | "info") => void;
+  navigate: (view: View) => void;
+}) {
+  const perm = ROLE_PERMISSIONS[role];
+  const [searchTerm, setSearchTerm] = useState("");
+  const [statusFilter, setStatusFilter] = useState("All");
+
+  const isTabAuthorized = (targetTab: VaultModuleId) => {
+    if (role === "executive_admin") return true;
+    return perm.allowedModules.includes(targetTab);
+  };
+
+  const handleExportProcurement = () => {
+    const headers = ["Bid ID", "Tender Ref", "Tender Title", "Bidder Name", "Email", "Phone", "Submitted At", "Status", "Total Files", "Evaluation Note"];
+    const rows = bids.map(b => [
+      b.id,
+      b.ref,
+      b.tenderTitle,
+      b.bidderName,
+      b.bidderEmail,
+      b.bidderPhone,
+      b.submittedAt,
+      b.status,
+      String(b.totalFiles),
+      b.evaluationNote || ""
+    ]);
+    exportToCsv("lacd_procurement_bids_manifest.csv", [headers, ...rows]);
+    alert("Procurement bids manifest exported to CSV.");
+  };
+
+  const handleExportDonations = () => {
+    const headers = ["Donation ID", "Donor Name", "Email", "Phone", "Channel", "Reference Code", "Amount USD", "Frequency", "Pillar", "Date", "Status"];
+    const rows = donations.map(d => [
+      d.id,
+      d.donorName,
+      d.donorEmail,
+      d.phone || "N/A",
+      d.channel,
+      d.referenceCode,
+      String(d.amountUsd),
+      d.frequency,
+      d.allocatedPillar,
+      d.date,
+      d.status
+    ]);
+    exportToCsv("lacd_donations_ledger.csv", [headers, ...rows]);
+    alert("Donations ledger exported to CSV.");
+  };
+
+  const handleExportComplaints = () => {
+    const headers = ["Grievance ID", "Category", "Severity", "Subject", "Status", "Submitted At", "Assigned Officer", "Notes Count"];
+    const rows = complaints.map(c => [
+      c.id,
+      c.category,
+      c.severity,
+      c.subject,
+      c.status,
+      c.submittedAt,
+      c.assignedOfficer,
+      String(c.investigationNotes.length)
+    ]);
+    exportToCsv("lacd_safeguarding_grievance_log.csv", [headers, ...rows]);
+    alert("Safeguarding grievance log exported to CSV (Complainant identities protected).");
+  };
+
+  return (
+    <Page
+      title="Institutional Document & Governance Vault"
+      eyebrow="Fiduciary Transparency & Compliance"
+      intro="Centralized digital repository for procurement proposals, charitable donor contributions, confidential safeguarding grievances, and executive management records."
+    >
+      <div className="vault-shell">
+        {/* RBAC Security Header Bar */}
+        <div className="vault-rbac-bar glass-panel">
+          <div className="rbac-status">
+            <div className="rbac-badge-wrapper">
+              <span className={`rbac-badge ${perm.badgeClass}`}>{perm.badge}</span>
+              <span className="rbac-active-indicator" title="Role-Based Access Control Active" />
+            </div>
+            <div className="rbac-info">
+              <h3>{perm.label}</h3>
+              <p>{perm.description}</p>
+            </div>
+          </div>
+          <div className="rbac-actions">
+            <button 
+              className="button glass-btn rbac-switch-btn"
+              onClick={() => setIsAuthModalOpen(true)}
+            >
+              🔑 Switch Role / Passkey Gate
+            </button>
+            {role !== "public" && (
+              <button 
+                className="button text-btn rbac-signout-btn"
+                onClick={() => { setRole("public"); alert("Switched to Public Transparency View."); }}
+              >
+                Exit to Public View
+              </button>
+            )}
+          </div>
+        </div>
+
+        {/* Vault Navigation Tabs with Access Control Badges */}
+        <div className="vault-tabs-header">
+          <div className="vault-tab-pills">
+            <button
+              className={`vault-tab-pill ${tab === "procurement" ? "active" : ""} ${!isTabAuthorized("procurement") && role !== "public" ? "restricted-tab" : ""}`}
+              onClick={() => setTab("procurement")}
+            >
+              <span className="tab-icon">📁</span>
+              <span>Procurement Bids & Proposals</span>
+              {!isTabAuthorized("procurement") && role !== "public" && <span className="tab-lock-badge">🔒 Restricted</span>}
+            </button>
+
+            <button
+              className={`vault-tab-pill ${tab === "donations" ? "active" : ""} ${!isTabAuthorized("donations") && role !== "public" ? "restricted-tab" : ""}`}
+              onClick={() => setTab("donations")}
+            >
+              <span className="tab-icon">💝</span>
+              <span>Donations & Contributions</span>
+              {!isTabAuthorized("donations") && role !== "public" && <span className="tab-lock-badge">🔒 Restricted</span>}
+            </button>
+
+            <button
+              className={`vault-tab-pill ${tab === "complaints" ? "active" : ""} ${!isTabAuthorized("complaints") && role !== "public" ? "restricted-tab" : ""}`}
+              onClick={() => setTab("complaints")}
+            >
+              <span className="tab-icon">🛡</span>
+              <span>Safeguarding & Grievances</span>
+              {!isTabAuthorized("complaints") && role !== "public" && <span className="tab-lock-badge">🔒 Restricted</span>}
+            </button>
+
+            <button
+              className={`vault-tab-pill ${tab === "institutional" ? "active" : ""} ${!isTabAuthorized("institutional") && role !== "public" ? "restricted-tab" : ""}`}
+              onClick={() => setTab("institutional")}
+            >
+              <span className="tab-icon">🏛</span>
+              <span>Board & Management Archives</span>
+              {!isTabAuthorized("institutional") && role !== "public" && <span className="tab-lock-badge">🔒 Restricted</span>}
+            </button>
+          </div>
+        </div>
+
+        {/* Access Enforcement Guard */}
+        {role === "public" ? (
+          <PublicTransparencyTab
+            tab={tab}
+            bids={bids}
+            donations={donations}
+            complaints={complaints}
+            onOpenAuth={() => setIsAuthModalOpen(true)}
+            onLodgeGrievance={() => setGrievanceModalOpen(true)}
+            navigate={navigate}
+          />
+        ) : !isTabAuthorized(tab) ? (
+          <AccessDeniedPanel
+            currentRole={role}
+            currentRoleLabel={perm.label}
+            attemptedModule={tab}
+            onSwitchRole={() => setIsAuthModalOpen(true)}
+            onReturnToAllowed={() => setTab(perm.allowedModules[0] || "procurement")}
+          />
+        ) : (
+          /* Authorized Module Views */
+          <div className="vault-module-content">
+            {tab === "procurement" && (
+              <ProcurementVaultTab
+                bids={bids}
+                onSelectDossier={setSelectedDossier}
+                onExportCsv={handleExportProcurement}
+                searchTerm={searchTerm}
+                setSearchTerm={setSearchTerm}
+                statusFilter={statusFilter}
+                setStatusFilter={setStatusFilter}
+              />
+            )}
+
+            {tab === "donations" && (
+              <DonationsVaultTab
+                donations={donations}
+                onExportCsv={handleExportDonations}
+                searchTerm={searchTerm}
+                setSearchTerm={setSearchTerm}
+                statusFilter={statusFilter}
+                setStatusFilter={setStatusFilter}
+              />
+            )}
+
+            {tab === "complaints" && (
+              <ComplaintsVaultTab
+                complaints={complaints}
+                setComplaints={setComplaints}
+                onLodgeGrievance={() => setGrievanceModalOpen(true)}
+                onExportCsv={handleExportComplaints}
+                searchTerm={searchTerm}
+                setSearchTerm={setSearchTerm}
+                statusFilter={statusFilter}
+                setStatusFilter={setStatusFilter}
+                alert={alert}
+              />
+            )}
+
+            {tab === "institutional" && (
+              <InstitutionalVaultTab
+                records={institutional}
+                searchTerm={searchTerm}
+                setSearchTerm={setSearchTerm}
+                statusFilter={statusFilter}
+                setStatusFilter={setStatusFilter}
+              />
+            )}
+          </div>
+        )}
+      </div>
+
+      {/* Role Switcher / Passkey Gate Modal */}
+      {isAuthModalOpen && (
+        <VaultRoleSwitcherModal
+          currentRole={role}
+          onSelectRole={(r) => {
+            setRole(r);
+            setIsAuthModalOpen(false);
+            if (r !== "public") {
+              const p = ROLE_PERMISSIONS[r];
+              if (p.allowedModules.length > 0 && !p.allowedModules.includes(tab) && r !== "executive_admin") {
+                setTab(p.allowedModules[0]);
+              }
+            }
+            alert(`Authenticated as ${ROLE_PERMISSIONS[r].label}.`);
+          }}
+          onClose={() => setIsAuthModalOpen(false)}
+        />
+      )}
+
+      {/* Bid Dossier Inspection Modal */}
+      {selectedDossier && (
+        <BidDossierModal
+          bid={selectedDossier}
+          onClose={() => setSelectedDossier(null)}
+          onUpdateStatus={(newStatus) => {
+            setBids(prev => prev.map(b => b.id === selectedDossier.id ? { ...b, status: newStatus } : b));
+            setSelectedDossier({ ...selectedDossier, status: newStatus });
+            alert(`Bid status updated to "${newStatus}".`);
+          }}
+          onUpdateNote={(note) => {
+            setBids(prev => prev.map(b => b.id === selectedDossier.id ? { ...b, evaluationNote: note } : b));
+            setSelectedDossier({ ...selectedDossier, evaluationNote: note });
+            alert("Evaluation note saved to bid dossier.");
+          }}
+        />
+      )}
+
+      {/* Grievance Intake Modal */}
+      {grievanceModalOpen && (
+        <GrievanceIntakeModal
+          onClose={() => setGrievanceModalOpen(false)}
+          onSubmitGrievance={(newComplaint) => {
+            setComplaints(prev => [newComplaint, ...prev]);
+            setGrievanceModalOpen(false);
+            alert(`Grievance ${newComplaint.id} submitted securely into the confidential Safeguarding Vault.`);
+          }}
+        />
+      )}
+    </Page>
+  );
+}
+
+// ----------------------------------------------------------------------------
+// ACCESS DENIED PANEL (Strict RBAC Isolation)
+// ----------------------------------------------------------------------------
+function AccessDeniedPanel({
+  currentRole,
+  currentRoleLabel,
+  attemptedModule,
+  onSwitchRole,
+  onReturnToAllowed,
+}: {
+  currentRole: VaultRole;
+  currentRoleLabel: string;
+  attemptedModule: VaultModuleId;
+  onSwitchRole: () => void;
+  onReturnToAllowed: () => void;
+}) {
+  const moduleNames: Record<VaultModuleId, string> = {
+    procurement: "Procurement Bids & Proposals",
+    donations: "Donations & Charitable Contributions",
+    complaints: "Safeguarding & Whistleblower Grievances",
+    institutional: "Executive Board & Management Archives",
+  };
+
+  const explanations: Record<string, string> = {
+    "procurement_officer:donations": "Procurement Officers are legally quarantined from donor financial contributions and pledge ledgers under PPCC and DAC compliance rules to maintain commercial neutrality and prevent conflicts of interest.",
+    "procurement_officer:complaints": "Safeguarding complaints and whistleblower disclosures are strictly restricted to the Safeguarding & Ethics Officer to safeguard victim identities and preserve confidential investigation integrity.",
+    "procurement_officer:institutional": "Executive Board resolutions and statutory internal governance archives require Executive Director or Internal Auditor clearance.",
+    "finance_officer:procurement": "Finance & Donor Relations Officers are quarantined from sealed tender proposals prior to official contract award to preserve procurement fairness.",
+    "finance_officer:complaints": "Confidential community complaints and safeguarding disclosures are restricted to the designated Safeguarding & Ethics Officer.",
+    "finance_officer:institutional": "Executive Board resolutions and statutory management records require Executive Director clearance.",
+    "safeguarding_officer:procurement": "Ethics & Safeguarding Officers are independent of commercial tender evaluations to preserve grievance oversight objectivity.",
+    "safeguarding_officer:donations": "Donor contribution ledgers are managed exclusively by Finance & Donor Relations Officers.",
+    "safeguarding_officer:institutional": "Statutory board archives are managed under Executive Director clearance.",
+  };
+
+  const reason = explanations[`${currentRole}:${attemptedModule}`] || "You do not have the required Role-Based Access Control (RBAC) credentials to inspect this module.";
+
+  return (
+    <div className="access-denied-shell glass-panel">
+      <div className="access-denied-icon">🔒</div>
+      <div className="access-denied-badge">403 Forbidden · Fiduciary RBAC Isolation</div>
+      <h2>Access Restricted to {moduleNames[attemptedModule]}</h2>
+      <div className="current-clearance-pill">
+        <span>Current Active Clearance:</span>
+        <b>{currentRoleLabel}</b>
+      </div>
+      <p className="access-denied-reason">{reason}</p>
+      <div className="access-denied-guideline">
+        <strong>LACD Data Governance Directive (Section 4.3):</strong>
+        <p>"Cross-departmental access between commercial procurement bids, donor contributions, and confidential safeguarding disclosures is strictly prohibited to preserve donor privacy, tender integrity, and whistleblower anonymity."</p>
+      </div>
+      <div className="access-denied-buttons">
+        <button className="button primary" onClick={onSwitchRole}>
+          🔑 Switch to an Authorized Role (Passkey Gate)
+        </button>
+        <button className="button secondary" onClick={onReturnToAllowed}>
+          ← Return to My Authorized Module
+        </button>
+      </div>
+    </div>
+  );
+}
+
+// ----------------------------------------------------------------------------
+// PUBLIC TRANSPARENCY TAB (Citizen View)
+// ----------------------------------------------------------------------------
+function PublicTransparencyTab({
+  tab,
+  bids,
+  donations,
+  complaints,
+  onOpenAuth,
+  onLodgeGrievance,
+  navigate,
+}: {
+  tab: VaultModuleId;
+  bids: VaultBidRecord[];
+  donations: VaultDonationRecord[];
+  complaints: VaultComplaintRecord[];
+  onOpenAuth: () => void;
+  onLodgeGrievance: () => void;
+  navigate: (view: View) => void;
+}) {
+  const totalMobilized = donations.reduce((sum, d) => sum + d.amountUsd, 0);
+
+  return (
+    <div className="public-transparency-layout">
+      <div className="public-banner glass-panel">
+        <div className="public-banner-copy">
+          <span className="public-badge">Citizen Transparency & Open Governance</span>
+          <h2>Public Accountability Register</h2>
+          <p>LACD operates under open disclosure standards. Citizens and donors can inspect high-level statistics, tender notices, and grievance resolution metrics. To access raw vendor proposals, donor transaction records, or confidential safeguarding dossiers, sign in with authorized officer credentials.</p>
+        </div>
+        <div className="public-banner-cta">
+          <button className="button primary" onClick={onOpenAuth}>
+            🔑 Officer Sign In / Switch Role
+          </button>
+          <button className="button secondary" onClick={onLodgeGrievance}>
+            🛡 Lodge Confidential Grievance
+          </button>
+        </div>
+      </div>
+
+      <div className="public-stats-grid">
+        <div className="stat-card glass-panel">
+          <span className="stat-label">Electronic Procurement</span>
+          <strong>{bids.length} Proposals</strong>
+          <small>Logged in electronic tender registry</small>
+        </div>
+        <div className="stat-card glass-panel">
+          <span className="stat-label">Community Mobilization</span>
+          <strong>${totalMobilized.toLocaleString()} USD</strong>
+          <small>Tracked across MoMo, Orange & Wire</small>
+        </div>
+        <div className="stat-card glass-panel">
+          <span className="stat-label">Safeguarding Response</span>
+          <strong>100%</strong>
+          <small>Cases acknowledged within 48 hours</small>
+        </div>
+        <div className="stat-card glass-panel">
+          <span className="stat-label">Audited Delivery</span>
+          <strong>Clean</strong>
+          <small>Unqualified external audit opinion</small>
+        </div>
+      </div>
+
+      <div className="public-register-card glass-panel">
+        <div className="register-header">
+          <div>
+            <h3>Public Tender Notice Register</h3>
+            <p>Active and archived solicitations conducted under PPCC guidelines.</p>
+          </div>
+          <button className="button secondary" onClick={() => navigate("procurement")}>
+            View Opportunities Portal →
+          </button>
+        </div>
+        <div className="vault-table-wrapper">
+          <table className="vault-table">
+            <thead>
+              <tr>
+                <th>Tender Reference</th>
+                <th>Solicitation Title</th>
+                <th>Closing Date</th>
+                <th>Bids Received</th>
+                <th>Status</th>
+                <th>Public Action</th>
+              </tr>
+            </thead>
+            <tbody>
+              <tr>
+                <td><b>LACD/RFQ/2026/007</b></td>
+                <td>Development of the LACD Website</td>
+                <td>14 Aug 2026 · 4:00 PM GMT</td>
+                <td><span className="badge-pill">{bids.filter(b=>b.ref==="LACD/RFQ/2026/007").length} Bids Logged</span></td>
+                <td><span className="status-pill status-active">Under Evaluation</span></td>
+                <td><button className="mini-btn" onClick={() => navigate("procurement")}>Open Notice</button></td>
+              </tr>
+              <tr>
+                <td><b>LACD/RFQ/2026/006</b></td>
+                <td>Supply and Installation of Community Solar Dryers</td>
+                <td>28 Jul 2026 · 4:00 PM GMT</td>
+                <td><span className="badge-pill">1 Bid Awarded</span></td>
+                <td><span className="status-pill status-cleared">Awarded</span></td>
+                <td><button className="mini-btn" onClick={() => navigate("procurement")}>View Award</button></td>
+              </tr>
+            </tbody>
+          </table>
+        </div>
+        <div className="public-notice-footer">
+          <p>ℹ️ Raw proposal attachments, bidder financial schedules, and evaluation scorecards are sealed under <b>Procurement Officer RBAC clearance</b> until contract award is published.</p>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+// ----------------------------------------------------------------------------
+// 1. PROCUREMENT MODULE (Procurement Officer & Executive Admin)
+// ----------------------------------------------------------------------------
+function ProcurementVaultTab({
+  bids,
+  onSelectDossier,
+  onExportCsv,
+  searchTerm,
+  setSearchTerm,
+  statusFilter,
+  setStatusFilter,
+}: {
+  bids: VaultBidRecord[];
+  onSelectDossier: (bid: VaultBidRecord) => void;
+  onExportCsv: () => void;
+  searchTerm: string;
+  setSearchTerm: (s: string) => void;
+  statusFilter: string;
+  setStatusFilter: (s: string) => void;
+}) {
+  const filteredBids = bids.filter(b => {
+    const matchSearch = b.bidderName.toLowerCase().includes(searchTerm.toLowerCase()) ||
+      b.id.toLowerCase().includes(searchTerm.toLowerCase()) ||
+      b.tenderTitle.toLowerCase().includes(searchTerm.toLowerCase());
+    const matchStatus = statusFilter === "All" || b.status === statusFilter;
+    return matchSearch && matchStatus;
+  });
+
+  const totalFilesArchived = bids.reduce((sum, b) => sum + b.totalFiles, 0);
+
+  return (
+    <div className="module-view-wrapper">
+      <div className="module-top-bar glass-panel">
+        <div className="module-metrics-row">
+          <div className="metric-chip">
+            <span>Total Proposals:</span>
+            <b>{bids.length}</b>
+          </div>
+          <div className="metric-chip">
+            <span>Archived Documents:</span>
+            <b>{totalFilesArchived} files</b>
+          </div>
+          <div className="metric-chip">
+            <span>Compliance Cleared:</span>
+            <b>{bids.filter(b => b.status === "Compliance Cleared" || b.status === "Awarded").length}</b>
+          </div>
+        </div>
+        <div className="module-controls">
+          <input
+            className="vault-search-input"
+            placeholder="Search by bidder, ID or tender..."
+            value={searchTerm}
+            onChange={(e) => setSearchTerm(e.target.value)}
+          />
+          <select
+            className="vault-filter-select"
+            value={statusFilter}
+            onChange={(e) => setStatusFilter(e.target.value)}
+          >
+            <option value="All">All Statuses</option>
+            <option value="Pending Opening">Pending Opening</option>
+            <option value="Under Evaluation">Under Evaluation</option>
+            <option value="Compliance Cleared">Compliance Cleared</option>
+            <option value="Awarded">Awarded</option>
+            <option value="Disqualified">Disqualified</option>
+          </select>
+          <button className="button glass-btn export-btn" onClick={onExportCsv}>
+            📥 Export CSV Manifest
+          </button>
+        </div>
+      </div>
+
+      <div className="vault-table-wrapper glass-panel">
+        <table className="vault-table">
+          <thead>
+            <tr>
+              <th>Bid Reference</th>
+              <th>Tender Solicitation</th>
+              <th>Bidder Organization</th>
+              <th>Submission Date</th>
+              <th>Attachments</th>
+              <th>Evaluation Status</th>
+              <th>Officer Action</th>
+            </tr>
+          </thead>
+          <tbody>
+            {filteredBids.map(bid => (
+              <tr key={bid.id}>
+                <td>
+                  <strong className="reference-code">{bid.id}</strong>
+                </td>
+                <td>
+                  <b>{bid.ref}</b>
+                  <small className="cell-subtext">{bid.tenderTitle}</small>
+                </td>
+                <td>
+                  <b>{bid.bidderName}</b>
+                  <small className="cell-subtext">{bid.bidderEmail}</small>
+                </td>
+                <td>
+                  <span>{bid.submittedAt}</span>
+                </td>
+                <td>
+                  <span className="files-count-badge">📎 {bid.totalFiles} documents</span>
+                </td>
+                <td>
+                  <span className={`status-pill ${
+                    bid.status === "Compliance Cleared" || bid.status === "Awarded" ? "status-cleared" :
+                    bid.status === "Under Evaluation" ? "status-review" : "status-pending"
+                  }`}>
+                    {bid.status}
+                  </span>
+                </td>
+                <td>
+                  <button 
+                    className="button primary mini-btn"
+                    onClick={() => onSelectDossier(bid)}
+                  >
+                    Inspect Dossier ↗
+                  </button>
+                </td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+        {filteredBids.length === 0 && (
+          <div className="empty-vault-state">
+            <p>No procurement submissions match your search filter.</p>
+          </div>
+        )}
+      </div>
+    </div>
+  );
+}
+
+// ----------------------------------------------------------------------------
+// 2. DONATIONS MODULE (Finance Officer & Executive Admin)
+// ----------------------------------------------------------------------------
+function DonationsVaultTab({
+  donations,
+  onExportCsv,
+  searchTerm,
+  setSearchTerm,
+  statusFilter,
+  setStatusFilter,
+}: {
+  donations: VaultDonationRecord[];
+  onExportCsv: () => void;
+  searchTerm: string;
+  setSearchTerm: (s: string) => void;
+  statusFilter: string;
+  setStatusFilter: (s: string) => void;
+}) {
+  const filtered = donations.filter(d => {
+    const matchSearch = d.donorName.toLowerCase().includes(searchTerm.toLowerCase()) ||
+      d.id.toLowerCase().includes(searchTerm.toLowerCase()) ||
+      d.referenceCode.toLowerCase().includes(searchTerm.toLowerCase());
+    const matchStatus = statusFilter === "All" || d.channel === statusFilter;
+    return matchSearch && matchStatus;
+  });
+
+  const totalFunds = donations.reduce((sum, d) => sum + d.amountUsd, 0);
+
+  return (
+    <div className="module-view-wrapper">
+      <div className="module-top-bar glass-panel">
+        <div className="module-metrics-row">
+          <div className="metric-chip">
+            <span>Total Mobilized:</span>
+            <b>${totalFunds.toLocaleString()} USD</b>
+          </div>
+          <div className="metric-chip">
+            <span>MoMo Contributions:</span>
+            <b>{donations.filter(d => d.channel === "MTN MoMo" || d.channel === "Orange Money").length}</b>
+          </div>
+          <div className="metric-chip">
+            <span>Bank Wire Transfers:</span>
+            <b>{donations.filter(d => d.channel === "Bank Wire Transfer").length}</b>
+          </div>
+        </div>
+        <div className="module-controls">
+          <input
+            className="vault-search-input"
+            placeholder="Search by donor, receipt ID or reference..."
+            value={searchTerm}
+            onChange={(e) => setSearchTerm(e.target.value)}
+          />
+          <select
+            className="vault-filter-select"
+            value={statusFilter}
+            onChange={(e) => setStatusFilter(e.target.value)}
+          >
+            <option value="All">All Channels</option>
+            <option value="MTN MoMo">MTN MoMo</option>
+            <option value="Orange Money">Orange Money</option>
+            <option value="Bank Wire Transfer">Bank Wire Transfer</option>
+          </select>
+          <button className="button glass-btn export-btn" onClick={onExportCsv}>
+            📥 Export Donations CSV
+          </button>
+        </div>
+      </div>
+
+      <div className="vault-table-wrapper glass-panel">
+        <table className="vault-table">
+          <thead>
+            <tr>
+              <th>Receipt Code</th>
+              <th>Donor Identity</th>
+              <th>Payment Channel</th>
+              <th>Tx Reference</th>
+              <th>Amount (USD)</th>
+              <th>Programme Allocation</th>
+              <th>Date</th>
+              <th>Status</th>
+              <th>Action</th>
+            </tr>
+          </thead>
+          <tbody>
+            {filtered.map(donation => (
+              <tr key={donation.id}>
+                <td><strong className="reference-code">{donation.id}</strong></td>
+                <td>
+                  <b>{donation.donorName}</b>
+                  <small className="cell-subtext">{donation.donorEmail}</small>
+                </td>
+                <td>
+                  <span className={`carrier-pill ${donation.channel.includes("MTN") ? "carrier-mtn" : donation.channel.includes("Orange") ? "carrier-orange" : "carrier-bank"}`}>
+                    {donation.channel}
+                  </span>
+                </td>
+                <td><code>{donation.referenceCode}</code></td>
+                <td>
+                  <strong className="amount-highlight">${donation.amountUsd.toFixed(2)}</strong>
+                  <small className="cell-subtext">{donation.frequency}</small>
+                </td>
+                <td><span>{donation.allocatedPillar}</span></td>
+                <td><span>{donation.date}</span></td>
+                <td><span className="status-pill status-cleared">{donation.status}</span></td>
+                <td>
+                  <button
+                    className="button secondary mini-btn"
+                    onClick={() => downloadDonationReceipt(donation)}
+                    title="Download Official Tax-Deductible Donation Receipt"
+                  >
+                    Receipt PDF ↓
+                  </button>
+                </td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+        {filtered.length === 0 && (
+          <div className="empty-vault-state">
+            <p>No donation records match your search filter.</p>
+          </div>
+        )}
+      </div>
+    </div>
+  );
+}
+
+// ----------------------------------------------------------------------------
+// 3. SAFEGUARDING & COMPLAINTS MODULE (Safeguarding Officer & Executive Admin)
+// ----------------------------------------------------------------------------
+function ComplaintsVaultTab({
+  complaints,
+  setComplaints,
+  onLodgeGrievance,
+  onExportCsv,
+  searchTerm,
+  setSearchTerm,
+  statusFilter,
+  setStatusFilter,
+  alert,
+}: {
+  complaints: VaultComplaintRecord[];
+  setComplaints: React.Dispatch<React.SetStateAction<VaultComplaintRecord[]>>;
+  onLodgeGrievance: () => void;
+  onExportCsv: () => void;
+  searchTerm: string;
+  setSearchTerm: (s: string) => void;
+  statusFilter: string;
+  setStatusFilter: (s: string) => void;
+  alert: (text: string, type?: "success" | "info") => void;
+}) {
+  const [selectedCase, setSelectedCase] = useState<VaultComplaintRecord | null>(null);
+  const [newNote, setNewNote] = useState("");
+
+  const filtered = complaints.filter(c => {
+    const matchSearch = c.id.toLowerCase().includes(searchTerm.toLowerCase()) ||
+      c.subject.toLowerCase().includes(searchTerm.toLowerCase()) ||
+      c.category.toLowerCase().includes(searchTerm.toLowerCase());
+    const matchStatus = statusFilter === "All" || c.status === statusFilter;
+    return matchSearch && matchStatus;
+  });
+
+  const handleAddNote = () => {
+    if (!selectedCase || !newNote.trim()) return;
+    const updatedNotes = [
+      ...selectedCase.investigationNotes,
+      `${new Date().toLocaleDateString("en-GB")}: ${newNote.trim()}`
+    ];
+    setComplaints(prev => prev.map(c => c.id === selectedCase.id ? { ...c, investigationNotes: updatedNotes } : c));
+    setSelectedCase({ ...selectedCase, investigationNotes: updatedNotes });
+    setNewNote("");
+    alert("Confidential investigation note added.");
+  };
+
+  const handleStatusChange = (newStatus: VaultComplaintRecord["status"]) => {
+    if (!selectedCase) return;
+    setComplaints(prev => prev.map(c => c.id === selectedCase.id ? { ...c, status: newStatus } : c));
+    setSelectedCase({ ...selectedCase, status: newStatus });
+    alert(`Grievance status updated to "${newStatus}".`);
+  };
+
+  return (
+    <div className="module-view-wrapper">
+      <div className="module-top-bar glass-panel">
+        <div className="module-metrics-row">
+          <div className="metric-chip">
+            <span>Logged Cases:</span>
+            <b>{complaints.length}</b>
+          </div>
+          <div className="metric-chip">
+            <span>48h Acknowledgment:</span>
+            <b className="text-emerald">100%</b>
+          </div>
+          <div className="metric-chip">
+            <span>Resolved / Closed:</span>
+            <b>{complaints.filter(c => c.status === "Case Closed").length}</b>
+          </div>
+        </div>
+        <div className="module-controls">
+          <input
+            className="vault-search-input"
+            placeholder="Search by ticket ID, subject or category..."
+            value={searchTerm}
+            onChange={(e) => setSearchTerm(e.target.value)}
+          />
+          <select
+            className="vault-filter-select"
+            value={statusFilter}
+            onChange={(e) => setStatusFilter(e.target.value)}
+          >
+            <option value="All">All Statuses</option>
+            <option value="Received & Acknowledged">Received & Acknowledged</option>
+            <option value="Independent Panel Review">Independent Panel Review</option>
+            <option value="Corrective Action">Corrective Action</option>
+            <option value="Case Closed">Case Closed</option>
+          </select>
+          <button className="button primary mini-btn" onClick={onLodgeGrievance}>
+            + Lodge Grievance / Alert
+          </button>
+          <button className="button glass-btn export-btn" onClick={onExportCsv}>
+            📥 Export CSV Log
+          </button>
+        </div>
+      </div>
+
+      <div className="grievance-cards-grid">
+        {filtered.map(caseItem => (
+          <article key={caseItem.id} className="grievance-card glass-panel">
+            <div className="grievance-card-header">
+              <div>
+                <span className="reference-code">{caseItem.id}</span>
+                <span className={`severity-pill severity-${caseItem.severity.toLowerCase().replace(/[^a-z]+/g, '-')}`}>
+                  {caseItem.severity}
+                </span>
+              </div>
+              <span className={`status-pill ${caseItem.status === "Case Closed" ? "status-cleared" : "status-review"}`}>
+                {caseItem.status}
+              </span>
+            </div>
+
+            <h4 className="grievance-title">{caseItem.subject}</h4>
+            <p className="grievance-category"><b>Category:</b> {caseItem.category}</p>
+
+            <div className="complainant-identity-tag">
+              <span className="icon">🛡</span>
+              <span>Complainant: <b>{caseItem.complainantName}</b></span>
+            </div>
+
+            <p className="grievance-snippet">{caseItem.details}</p>
+
+            <div className="grievance-card-footer">
+              <small>Logged: {caseItem.submittedAt}</small>
+              <button
+                className="button secondary mini-btn"
+                onClick={() => setSelectedCase(caseItem)}
+              >
+                Open Case Dossier ↗
+              </button>
+            </div>
+          </article>
+        ))}
+      </div>
+
+      {filtered.length === 0 && (
+        <div className="empty-vault-state glass-panel">
+          <p>No safeguarding or grievance records match your filter criteria.</p>
+        </div>
+      )}
+
+      {/* Case Details Drawer / Modal */}
+      {selectedCase && (
+        <div className="modal-overlay" role="dialog" aria-modal="true">
+          <div className="modal-card glass-panel dossier-modal">
+            <div className="modal-header">
+              <div>
+                <span className="modal-eyebrow">Confidential Safeguarding Dossier</span>
+                <h2>Case {selectedCase.id}</h2>
+              </div>
+              <button className="modal-close-btn" onClick={() => setSelectedCase(null)}>✕</button>
+            </div>
+
+            <div className="modal-body">
+              <div className="dossier-meta-grid">
+                <div><span>Subject</span><b>{selectedCase.subject}</b></div>
+                <div><span>Category</span><b>{selectedCase.category}</b></div>
+                <div><span>Severity</span><b className="text-red">{selectedCase.severity}</b></div>
+                <div><span>Assigned Focal Point</span><b>{selectedCase.assignedOfficer}</b></div>
+                <div><span>Complainant</span><b>{selectedCase.complainantName}</b></div>
+                <div><span>Contact Channel</span><b>{selectedCase.complainantContact || "Protected Hotline"}</b></div>
+              </div>
+
+              <div className="dossier-section">
+                <h4>Case Narrative & Allegation Details</h4>
+                <p className="case-details-box">{selectedCase.details}</p>
+              </div>
+
+              <div className="dossier-section">
+                <h4>Investigation Log & Remedial Actions</h4>
+                <div className="investigation-timeline">
+                  {selectedCase.investigationNotes.map((note, idx) => (
+                    <div key={idx} className="timeline-item">
+                      <span className="timeline-dot" />
+                      <p>{note}</p>
+                    </div>
+                  ))}
+                </div>
+
+                <div className="add-note-box">
+                  <input
+                    placeholder="Append new investigation note or remedial action..."
+                    value={newNote}
+                    onChange={(e) => setNewNote(e.target.value)}
+                  />
+                  <button className="button secondary mini-btn" onClick={handleAddNote}>
+                    Append Note
+                  </button>
+                </div>
+              </div>
+
+              <div className="dossier-section">
+                <h4>Update Case Status</h4>
+                <div className="status-action-row">
+                  {(["Received & Acknowledged", "Independent Panel Review", "Corrective Action", "Case Closed"] as const).map(st => (
+                    <button
+                      key={st}
+                      className={`status-btn ${selectedCase.status === st ? "active" : ""}`}
+                      onClick={() => handleStatusChange(st)}
+                    >
+                      {st}
+                    </button>
+                  ))}
+                </div>
+              </div>
+            </div>
+
+            <div className="modal-footer">
+              <button className="button secondary" onClick={() => setSelectedCase(null)}>
+                Close Dossier
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+    </div>
+  );
+}
+
+// ----------------------------------------------------------------------------
+// 4. INSTITUTIONAL MODULE (Executive Director & Auditor)
+// ----------------------------------------------------------------------------
+function InstitutionalVaultTab({
+  records,
+  searchTerm,
+  setSearchTerm,
+  statusFilter,
+  setStatusFilter,
+}: {
+  records: VaultInstitutionalRecord[];
+  searchTerm: string;
+  setSearchTerm: (s: string) => void;
+  statusFilter: string;
+  setStatusFilter: (s: string) => void;
+}) {
+  const filtered = records.filter(r => {
+    const matchSearch = r.title.toLowerCase().includes(searchTerm.toLowerCase()) ||
+      r.referenceNo.toLowerCase().includes(searchTerm.toLowerCase()) ||
+      r.category.toLowerCase().includes(searchTerm.toLowerCase());
+    const matchStatus = statusFilter === "All" || r.category === statusFilter;
+    return matchSearch && matchStatus;
+  });
+
+  return (
+    <div className="module-view-wrapper">
+      <div className="module-top-bar glass-panel">
+        <div className="module-metrics-row">
+          <div className="metric-chip">
+            <span>Governance Records:</span>
+            <b>{records.length} Documents</b>
+          </div>
+          <div className="metric-chip">
+            <span>Classification:</span>
+            <b>Board & Statutory Audit</b>
+          </div>
+          <div className="metric-chip">
+            <span>External Audit Opinion:</span>
+            <b className="text-emerald">Unqualified (Clean)</b>
+          </div>
+        </div>
+        <div className="module-controls">
+          <input
+            className="vault-search-input"
+            placeholder="Search by title, reference number or category..."
+            value={searchTerm}
+            onChange={(e) => setSearchTerm(e.target.value)}
+          />
+          <select
+            className="vault-filter-select"
+            value={statusFilter}
+            onChange={(e) => setStatusFilter(e.target.value)}
+          >
+            <option value="All">All Categories</option>
+            <option value="Board Resolution">Board Resolution</option>
+            <option value="Statutory Audit">Statutory Audit</option>
+            <option value="PPCC Clearance">PPCC Clearance</option>
+            <option value="MOU & Partnership">MOU & Partnership</option>
+          </select>
+        </div>
+      </div>
+
+      <div className="institutional-cards-grid">
+        {filtered.map(docItem => (
+          <article key={docItem.id} className="institutional-card glass-panel">
+            <div className="inst-header">
+              <span className="inst-category-pill">{docItem.category}</span>
+              <span className="inst-classification-badge">{docItem.classification}</span>
+            </div>
+            <h3>{docItem.title}</h3>
+            <p className="inst-summary">{docItem.summary}</p>
+            <div className="inst-meta-grid">
+              <div><span>Ref:</span> <b>{docItem.referenceNo}</b></div>
+              <div><span>Year:</span> <b>{docItem.year}</b></div>
+              <div><span>Signatory:</span> <b>{docItem.signatory}</b></div>
+              <div><span>Size:</span> <b>{docItem.fileSize}</b></div>
+            </div>
+            <div className="inst-footer">
+              <button
+                className="button primary mini-btn"
+                onClick={() => downloadInstitutionalDoc(docItem)}
+              >
+                Download Verified PDF ↓
+              </button>
+            </div>
+          </article>
+        ))}
+      </div>
+    </div>
+  );
+}
+
+// ----------------------------------------------------------------------------
+// MODAL: ROLE SWITCHER / PASSKEY GATE
+// ----------------------------------------------------------------------------
+function VaultRoleSwitcherModal({
+  currentRole,
+  onSelectRole,
+  onClose,
+}: {
+  currentRole: VaultRole;
+  onSelectRole: (role: VaultRole) => void;
+  onClose: () => void;
+}) {
+  const [enteredPasskey, setEnteredPasskey] = useState("");
+  const [passkeyError, setPasskeyError] = useState("");
+
+  const handlePasskeySubmit = (e: FormEvent) => {
+    e.preventDefault();
+    const key = enteredPasskey.trim().toUpperCase();
+    if (key === "LACD-PROC-2026") return onSelectRole("procurement_officer");
+    if (key === "LACD-DONOR-2026") return onSelectRole("finance_officer");
+    if (key === "LACD-ETHICS-2026") return onSelectRole("safeguarding_officer");
+    if (key === "LACD-ADMIN-2026") return onSelectRole("executive_admin");
+    setPasskeyError("Invalid passkey. Try one of the demonstration roles below.");
+  };
+
+  const rolesList: { role: VaultRole; title: string; passkey: string; description: string; scope: string }[] = [
+    {
+      role: "public",
+      title: "Public Citizen / Auditor",
+      passkey: "None (Open)",
+      description: "Public transparency register with sanitized metrics and tender notices. Sensitive files restricted.",
+      scope: "Public Ledger Only",
+    },
+    {
+      role: "procurement_officer",
+      title: "Procurement & Contracts Officer",
+      passkey: "LACD-PROC-2026",
+      description: "Full access to procurement bids, bidder proposals, and multi-file attachments. Quarantined from donations & complaints.",
+      scope: "Procurement Solicitations & Bids Only",
+    },
+    {
+      role: "finance_officer",
+      title: "Finance & Donor Relations Officer",
+      passkey: "LACD-DONOR-2026",
+      description: "Full access to MoMo, Orange Money, and Bank wire contribution ledgers and tax receipts. Quarantined from bids & complaints.",
+      scope: "Donations & Financial Ledgers Only",
+    },
+    {
+      role: "safeguarding_officer",
+      title: "Safeguarding, Ethics & Legal Officer",
+      passkey: "LACD-ETHICS-2026",
+      description: "Full access to confidential community grievances, whistleblower cases, and investigation notes. Quarantined from bids & donations.",
+      scope: "Safeguarding & Grievances Only",
+    },
+    {
+      role: "executive_admin",
+      title: "Executive Director / Internal Auditor",
+      passkey: "LACD-ADMIN-2026",
+      description: "Comprehensive cross-module oversight across Procurement, Donor Contributions, Safeguarding, and Board Archives.",
+      scope: "Full Fiduciary & Board Clearance (All Modules)",
+    },
+  ];
+
+  return (
+    <div className="modal-overlay" role="dialog" aria-modal="true">
+      <div className="modal-card glass-panel auth-modal">
+        <div className="modal-header">
+          <div>
+            <span className="modal-eyebrow">Role-Based Access Control (RBAC)</span>
+            <h2>Officer Authentication Gate</h2>
+          </div>
+          <button className="modal-close-btn" onClick={onClose}>✕</button>
+        </div>
+
+        <div className="modal-body">
+          <form className="passkey-manual-form" onSubmit={handlePasskeySubmit}>
+            <label>
+              <span>Enter Officer Passkey:</span>
+              <div className="passkey-input-row">
+                <input
+                  placeholder="e.g. LACD-PROC-2026, LACD-ADMIN-2026"
+                  value={enteredPasskey}
+                  onChange={(e) => { setEnteredPasskey(e.target.value); setPasskeyError(""); }}
+                />
+                <button className="button primary">Authenticate →</button>
+              </div>
+            </label>
+            {passkeyError && <p className="auth-error-text">{passkeyError}</p>}
+          </form>
+
+          <div className="auth-divider">
+            <span>OR SELECT A ROLE FOR DEMONSTRATION TESTING</span>
+          </div>
+
+          <div className="role-cards-selection">
+            {rolesList.map(item => (
+              <div
+                key={item.role}
+                className={`role-select-card ${currentRole === item.role ? "active-role" : ""}`}
+                onClick={() => onSelectRole(item.role)}
+              >
+                <div className="role-card-top">
+                  <h4>{item.title}</h4>
+                  {currentRole === item.role ? (
+                    <span className="current-active-tag">Active Role ✓</span>
+                  ) : (
+                    <span className="passkey-tag">Key: {item.passkey}</span>
+                  )}
+                </div>
+                <p className="role-card-desc">{item.description}</p>
+                <div className="role-card-scope">
+                  <span>Scope: <b>{item.scope}</b></span>
+                </div>
+              </div>
+            ))}
+          </div>
+        </div>
+
+        <div className="modal-footer">
+          <button className="button secondary" onClick={onClose}>Cancel</button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+// ----------------------------------------------------------------------------
+// MODAL: BID DOSSIER INSPECTOR
+// ----------------------------------------------------------------------------
+function BidDossierModal({
+  bid,
+  onClose,
+  onUpdateStatus,
+  onUpdateNote,
+}: {
+  bid: VaultBidRecord;
+  onClose: () => void;
+  onUpdateStatus: (s: VaultBidRecord["status"]) => void;
+  onUpdateNote: (n: string) => void;
+}) {
+  const [note, setNote] = useState(bid.evaluationNote || "");
+
+  const handleDownloadAllSummary = () => {
+    const doc = new jsPDF();
+    doc.setFillColor(18, 63, 42);
+    doc.rect(0, 0, 210, 26, "F");
+    doc.setTextColor(255, 255, 255);
+    doc.setFont("helvetica", "bold");
+    doc.setFontSize(13);
+    doc.text("LIBERIA AGENCY FOR COMMUNITY DEVELOPMENT (LACD)", 18, 14);
+    doc.setFontSize(8.5);
+    doc.setFont("helvetica", "normal");
+    doc.text("OFFICIAL PROPOSAL SUBMISSION & EVALUATION DOSSIER", 18, 20);
+
+    doc.setTextColor(18, 63, 42);
+    doc.setFontSize(16);
+    doc.setFont("helvetica", "bold");
+    doc.text(`BID DOSSIER: ${bid.id}`, 18, 42);
+
+    doc.setTextColor(60, 70, 65);
+    doc.setFontSize(10);
+    doc.setFont("helvetica", "normal");
+    doc.text(`Tender: ${bid.ref} - ${bid.tenderTitle}`, 18, 52);
+    doc.text(`Bidder: ${bid.bidderName}`, 18, 60);
+    doc.text(`Email: ${bid.bidderEmail} | Phone: ${bid.bidderPhone}`, 18, 68);
+    doc.text(`Submitted: ${bid.submittedAt}`, 18, 76);
+    doc.text(`Status: ${bid.status}`, 18, 84);
+
+    doc.setDrawColor(210, 220, 215);
+    doc.line(18, 92, 192, 92);
+
+    doc.setFont("helvetica", "bold");
+    doc.text("ATTACHED PROPOSAL DOCUMENTS:", 18, 102);
+    doc.setFont("helvetica", "normal");
+
+    let y = 110;
+    bid.categories.forEach(cat => {
+      doc.setFont("helvetica", "bold");
+      doc.text(`• ${cat.label}:`, 22, y);
+      y += 6;
+      doc.setFont("helvetica", "normal");
+      if (cat.files.length === 0) {
+        doc.text("  - No files uploaded", 26, y);
+        y += 6;
+      } else {
+        cat.files.forEach(f => {
+          doc.text(`  - ${f.name} (${(f.size / 1024).toFixed(1)} KB)`, 26, y);
+          y += 6;
+        });
+      }
+    });
+
+    if (bid.evaluationNote) {
+      y += 6;
+      doc.setFont("helvetica", "bold");
+      doc.text("PROCUREMENT COMMITTEE EVALUATION NOTE:", 18, y);
+      y += 6;
+      doc.setFont("helvetica", "normal");
+      const lines = doc.splitTextToSize(bid.evaluationNote, 174);
+      doc.text(lines, 18, y);
+    }
+
+    doc.save(`${bid.id}-Dossier.pdf`);
+  };
+
+  return (
+    <div className="modal-overlay" role="dialog" aria-modal="true">
+      <div className="modal-card glass-panel dossier-modal">
+        <div className="modal-header">
+          <div>
+            <span className="modal-eyebrow">Procurement Committee Dossier</span>
+            <h2>{bid.id}</h2>
+          </div>
+          <button className="modal-close-btn" onClick={onClose}>✕</button>
+        </div>
+
+        <div className="modal-body">
+          <div className="dossier-meta-grid">
+            <div><span>Tender Reference</span><b>{bid.ref}</b></div>
+            <div><span>Tender Title</span><b>{bid.tenderTitle}</b></div>
+            <div><span>Bidder Organization</span><b>{bid.bidderName}</b></div>
+            <div><span>Bidder Contact</span><b>{bid.bidderEmail} · {bid.bidderPhone}</b></div>
+            <div><span>Submission Timestamp</span><b>{bid.submittedAt}</b></div>
+            <div><span>Total Attached Files</span><b>{bid.totalFiles} documents</b></div>
+          </div>
+
+          <div className="dossier-section">
+            <h4>Evaluation Status & Compliance Actions</h4>
+            <div className="status-action-row">
+              {(["Pending Opening", "Under Evaluation", "Compliance Cleared", "Awarded", "Disqualified"] as const).map(st => (
+                <button
+                  key={st}
+                  className={`status-btn ${bid.status === st ? "active" : ""}`}
+                  onClick={() => onUpdateStatus(st)}
+                >
+                  {st}
+                </button>
+              ))}
+            </div>
+          </div>
+
+          <div className="dossier-section">
+            <h4>Evaluation Committee Notes</h4>
+            <div className="add-note-box">
+              <textarea
+                rows={2}
+                placeholder="Enter official evaluation remarks, LRA verification status, or scoring notes..."
+                value={note}
+                onChange={(e) => setNote(e.target.value)}
+              />
+              <button className="button secondary mini-btn" onClick={() => onUpdateNote(note)}>
+                Save Evaluation Note
+              </button>
+            </div>
+          </div>
+
+          <div className="dossier-section">
+            <h4>Attached Compliance & Proposal Files ({bid.totalFiles})</h4>
+            <div className="dossier-categories-list">
+              {bid.categories.map(cat => (
+                <div key={cat.key} className="dossier-cat-card">
+                  <div className="cat-title-row">
+                    <b>{cat.label}</b>
+                    <span>{cat.files.length} file{cat.files.length === 1 ? "" : "s"}</span>
+                  </div>
+                  {cat.files.length === 0 ? (
+                    <small className="no-files-text">No documents attached in this category.</small>
+                  ) : (
+                    <div className="cat-files-grid">
+                      {cat.files.map((file, idx) => (
+                        <div key={idx} className="dossier-file-chip">
+                          <span className="file-icon">📄</span>
+                          <div className="file-info">
+                            <span className="file-name">{file.name}</span>
+                            <small className="file-meta">{(file.size / 1024).toFixed(1)} KB · Verified</small>
+                          </div>
+                          <button
+                            className="download-file-btn"
+                            onClick={() => downloadVaultFile(file.name, cat.label, bid.bidderName)}
+                            title="Download verified attachment file"
+                          >
+                            ↓ Download
+                          </button>
+                        </div>
+                      ))}
+                    </div>
+                  )}
+                </div>
+              ))}
+            </div>
+          </div>
+        </div>
+
+        <div className="modal-footer">
+          <button className="button primary" onClick={handleDownloadAllSummary}>
+            Download Full Dossier PDF ↓
+          </button>
+          <button className="button secondary" onClick={onClose}>
+            Close
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+// ----------------------------------------------------------------------------
+// MODAL: CONFIDENTIAL GRIEVANCE INTAKE
+// ----------------------------------------------------------------------------
+function GrievanceIntakeModal({
+  onClose,
+  onSubmitGrievance,
+}: {
+  onClose: () => void;
+  onSubmitGrievance: (complaint: VaultComplaintRecord) => void;
+}) {
+  const [category, setCategory] = useState<VaultComplaintRecord["category"]>("Safeguarding & Harassment");
+  const [severity, setSeverity] = useState<VaultComplaintRecord["severity"]>("Critical / High");
+  const [isAnonymous, setIsAnonymous] = useState(true);
+  const [name, setName] = useState("");
+  const [contact, setContact] = useState("");
+  const [subject, setSubject] = useState("");
+  const [details, setDetails] = useState("");
+
+  const handleSubmit = (e: FormEvent) => {
+    e.preventDefault();
+    if (!subject.trim() || !details.trim()) return;
+    const ticketId = `LACD-GRV-${new Date().getFullYear()}-${String(Math.floor(Math.random() * 900) + 100)}`;
+    const newRecord: VaultComplaintRecord = {
+      id: ticketId,
+      category,
+      severity,
+      complainantName: isAnonymous ? "Confidential Whistleblower (Identity Protected)" : (name.trim() || "Confidential"),
+      complainantContact: isAnonymous ? "Encrypted Vault Channel" : (contact.trim() || "Protected"),
+      submittedAt: new Date().toLocaleDateString("en-GB", { day: "numeric", month: "short", year: "numeric", hour: "2-digit", minute: "2-digit" }),
+      subject: subject.trim(),
+      details: details.trim(),
+      status: "Received & Acknowledged",
+      assignedOfficer: "Safeguarding & Ethics Focal Point",
+      investigationNotes: [
+        `${new Date().toLocaleDateString("en-GB")}: Confidential grievance logged directly into the Safeguarding Document Vault. Case review initiated under 48h protocol.`
+      ]
+    };
+    onSubmitGrievance(newRecord);
+  };
+
+  return (
+    <div className="modal-overlay" role="dialog" aria-modal="true">
+      <div className="modal-card glass-panel grievance-intake-modal">
+        <div className="modal-header">
+          <div>
+            <span className="modal-eyebrow">Confidential Safeguarding Mechanism</span>
+            <h2>Lodge Grievance or Whistleblower Alert</h2>
+          </div>
+          <button className="modal-close-btn" onClick={onClose}>✕</button>
+        </div>
+
+        <form onSubmit={handleSubmit}>
+          <div className="modal-body">
+            <div className="safeguarding-pledge-box">
+              <span className="shield-icon">🛡</span>
+              <p><b>Confidentiality Guarantee:</b> Submissions are routed directly to the designated Safeguarding & Ethics Officer. Whistleblower identities are protected by law and organizational policy.</p>
+            </div>
+
+            <div className="form-row-2">
+              <label>
+                <span>Grievance Category *</span>
+                <select value={category} onChange={(e) => setCategory(e.target.value as any)}>
+                  <option value="Safeguarding & Harassment">Safeguarding & Harassment</option>
+                  <option value="Procurement Integrity / Fraud">Procurement Integrity / Fraud</option>
+                  <option value="Service Delivery Quality">Service Delivery Quality</option>
+                  <option value="Environmental / Social">Environmental / Social</option>
+                  <option value="General Grievance">General Grievance</option>
+                </select>
+              </label>
+
+              <label>
+                <span>Severity Assessment *</span>
+                <select value={severity} onChange={(e) => setSeverity(e.target.value as any)}>
+                  <option value="Critical / High">Critical / High (Immediate action required)</option>
+                  <option value="Medium">Medium (Standard 14-day inquiry)</option>
+                  <option value="Routine">Routine (Service quality feedback)</option>
+                </select>
+              </label>
+            </div>
+
+            <label className="checkbox-row">
+              <input
+                type="checkbox"
+                checked={isAnonymous}
+                onChange={(e) => setIsAnonymous(e.target.checked)}
+              />
+              <span>Submit anonymously (Identity completely hidden from case files)</span>
+            </label>
+
+            {!isAnonymous && (
+              <div className="form-row-2">
+                <label>
+                  <span>Your Name (Optional)</span>
+                  <input placeholder="Enter name" value={name} onChange={(e) => setName(e.target.value)} />
+                </label>
+                <label>
+                  <span>Confidential Phone or Email</span>
+                  <input placeholder="For focal point contact" value={contact} onChange={(e) => setContact(e.target.value)} />
+                </label>
+              </div>
+            )}
+
+            <label>
+              <span>Summary / Subject *</span>
+              <input
+                required
+                placeholder="Brief summary of the issue or concern"
+                value={subject}
+                onChange={(e) => setSubject(e.target.value)}
+              />
+            </label>
+
+            <label>
+              <span>Detailed Description & Evidence *</span>
+              <textarea
+                required
+                rows={4}
+                placeholder="Describe what occurred, dates, locations (e.g. County/Community), and any persons involved..."
+                value={details}
+                onChange={(e) => setDetails(e.target.value)}
+              />
+            </label>
+          </div>
+
+          <div className="modal-footer">
+            <button className="button primary">Submit Grievance to Vault →</button>
+            <button type="button" className="button secondary" onClick={onClose}>Cancel</button>
+          </div>
+        </form>
+      </div>
+    </div>
+  );
+}
+
