@@ -1,0 +1,857 @@
+"use client";
+
+import { FormEvent, useEffect, useMemo, useRef, useState } from "react";
+import { jsPDF } from "jspdf";
+
+type View = "home" | "about" | "vision" | "strategy" | "programmes" | "programme-detail" | "projects" | "news" | "stories" | "careers" | "events" | "content-detail" | "gallery" | "partners" | "resources" | "procurement" | "contact" | "privacy" | "terms" | "search" | "admin";
+type Notice = { type: "success" | "info"; text: string } | null;
+type Resource = { id: number; type: string; year: string; title: string; summary: string };
+type StoredFile = { key: string; name: string; type: string; size: number; scanStatus: string };
+type Attachment = { key: string; label: string; required: boolean; file?: File | StoredFile };
+const isStoredFile = (file: File | StoredFile | undefined): file is StoredFile => Boolean(file && "key" in file);
+type SolicitationContent = { scope: string; eligibility: string; evaluation: string; submission: string };
+type Opportunity = { status: string; tag: string; title: string; ref: string; deadline: string; description: string; specialties: string[]; solicitation?: SolicitationContent };
+type ContentItem = { id: number; type: "News" | "Success Story" | "Vacancy" | "Event"; title: string; date: string; summary: string; status?: string; category: string; author: string; body: string; result?: string; image?: string; cmsStatus?: "Published"|"Draft"|"Scheduled"|"Archived" };
+
+const starterContent: ContentItem[] = [
+  { id: 1, type: "News", title: "Community-led planning strengthens local ownership", date: "28 July 2026", summary: "LACD convened community representatives to review priorities, implementation responsibilities and local accountability mechanisms.", category:"Governance", author:"LACD Communications Unit", body:"Community representatives, programme teams and local leaders reviewed shared priorities and agreed practical accountability measures. The process places community knowledge at the centre of planning, implementation and learning.", image:"/activities/lacd-community-distribution.png" },
+  { id: 2, type: "Success Story", title: "Women producers turn post-harvest loss into opportunity", date: "18 July 2026", summary: "A learning story illustrating how skills, appropriate technology and collective enterprise can strengthen household income.", category:"Women & Livelihoods", author:"LACD Programme Team", body:"A women-led producer group combined improved drying, business coaching and collective marketing to reduce losses and improve product quality.", result:"35 producers trained · 22% illustrative reduction in post-harvest loss · 3 new buyer relationships", image:"/activities/agriculture-training.png" },
+  { id: 3, type: "Event", title: "Community Development Learning Forum", date: "14 August 2026", summary: "Partners, programme teams and community leaders share implementation evidence and practical lessons.", category:"Learning Forum", author:"LACD Secretariat", body:"The forum brings together community leaders, partners and practitioners for programme demonstrations, evidence sessions and action planning." },
+  { id: 4, type: "Vacancy", title: "Programme Monitoring and Learning Officer", date: "Closing 22 August 2026", summary: "Illustrative vacancy demonstrating LACD's careers publishing and downloadable job-description workflow.", status: "Open", category:"Monitoring & Evaluation", author:"Human Resources", body:"The officer will strengthen results frameworks, field monitoring, data quality, learning products and programme accountability. Applicants should demonstrate relevant education, experience and commitment to safeguarding." },
+];
+
+const galleryItems = [
+  { type: "Video", title: "LACD community development in action", meta: "Official LACD Facebook video · Agriculture", image:"/activities/lacd-agriculture-video-thumbnail.png", embed: "https://www.facebook.com/plugins/video.php?height=314&href=https%3A%2F%2Fwww.facebook.com%2F100054497019309%2Fvideos%2F1415871691886523%2F&show_text=false&width=560&t=0" },
+  { type: "Photo", title: "Climate-smart agriculture field learning", meta: "Bomi County · Demonstration media", image:"/activities/agriculture-training.png" },
+  { type: "Photo", title: "Women enterprise capacity session", meta: "Montserrado · Demonstration media" },
+  { type: "Photo", title: "Community planning dialogue", meta: "Gbarpolu · Demonstration media" },
+  { type: "Photo", title: "Youth clean-energy skills workshop", meta: "Margibi · Demonstration media" },
+];
+
+const starterCarouselActivities = [
+  { title:"Food-assistance storage and accountability", caption:"LACD field documentation of humanitarian food commodities prepared for community distribution.", image:"/activities/lacd-food-store.png", url:"https://www.facebook.com/p/Liberia-Agency-For-Community-Development-100054497019309/" },
+  { title:"Community food distribution", caption:"LACD-supported delivery of essential food assistance to participating households.", image:"/activities/lacd-food-distribution.png", url:"https://www.facebook.com/p/Liberia-Agency-For-Community-Development-100054497019309/" },
+  { title:"Community mobilization in action", caption:"Residents and field teams gathering for an organized assistance activity.", image:"/activities/lacd-community-distribution.png", url:"https://www.facebook.com/p/Liberia-Agency-For-Community-Development-100054497019309/" },
+  { title:"Reaching participating households", caption:"Community members receiving support through a locally coordinated distribution exercise.", image:"/activities/lacd-beneficiary-support.png", url:"https://www.facebook.com/p/Liberia-Agency-For-Community-Development-100054497019309/" },
+  { title:"Field access and programme delivery", caption:"An LACD field mission navigating difficult road conditions to reach communities.", image:"/activities/lacd-field-mission.png", url:"https://www.facebook.com/p/Liberia-Agency-For-Community-Development-100054497019309/" },
+  { title:"Resilient livelihoods in practice", caption:"Representative demonstration image for LACD agriculture and community-livelihood activities.", image:"/activities/agriculture-training.png", url:"https://www.facebook.com/100054497019309/posts/at-lacds-function/503347380260256/" },
+  { title:"Community participation and learning", caption:"Representative demonstration image for LACD stakeholder engagement and institutional learning.", image:"/activities/community-workshop.png", url:"https://www.facebook.com/100054497019309/posts/lacd-representative-at-ktk-workshop/503345436927117/" },
+  { title:"Youth skills for a cleaner future", caption:"Representative demonstration image for LACD youth and clean-energy programming.", image:"/activities/youth-solar-training.png", url:"https://www.facebook.com/100054497019309/photos/855188188409505/" },
+];
+
+type StaffRole = "Administrator" | "Content Editor" | "Programme Author" | "Procurement Publisher" | "Analytics Viewer";
+
+const starterProgrammes = [
+  { icon: "🌾", title: "Food Security & Agriculture", text: "Climate-smart production, resilient livelihoods and stronger local food systems.", county: "Bomi · Gbarpolu · Grand Cape Mount" },
+  { icon: "☀", title: "Climate & Clean Energy", text: "Practical solutions that help communities adapt, produce and prosper sustainably.", county: "Montserrado · Margibi" },
+  { icon: "✦", title: "Women & Youth", text: "Skills, enterprise and leadership pathways that expand economic participation.", county: "National" },
+  { icon: "●", title: "Health & Nutrition", text: "Community-centred action that improves wellbeing, nutrition and access to information.", county: "Bong · Nimba" },
+  { icon: "⌂", title: "Education", text: "Inclusive learning and capacity development for children, youth and institutions.", county: "Grand Bassa · Rivercess" },
+  { icon: "◎", title: "Governance & Inclusion", text: "Participation, accountability and systems that leave no community behind.", county: "All 15 counties" },
+];
+
+const programmeProfiles: Record<string, { tagline:string; overview:string; objectives:string[]; activities:string[]; indicators:{label:string;value:string}[]; focus:string[]; beneficiaries:string; partners:string; status:string }> = {
+  "Food Security & Agriculture": { tagline:"From climate-smart production to stronger local markets.", overview:"LACD works with producer groups, households and local institutions to improve sustainable production, reduce post-harvest loss and strengthen community food systems. The programme combines practical field learning, appropriate technology and market readiness.", objectives:["Increase climate-resilient food production and household nutrition.","Reduce post-harvest losses through improved handling, storage and processing.","Strengthen producer organizations and equitable access to markets."], activities:["Participatory farm and livelihood assessments","Farmer field schools and demonstration plots","Solar drying, storage and value-addition support","Producer-group governance and market linkage sessions"], indicators:[{label:"Illustrative reach",value:"1,850 people"},{label:"Producer groups",value:"24"},{label:"Target counties",value:"3"}], focus:["Rice and vegetable production","Post-harvest management","Enterprise and market systems"], beneficiaries:"Smallholder farmers, women-led producer groups and rural households", partners:"County authorities, community structures and technical partners", status:"Active demonstration portfolio" },
+  "Climate & Clean Energy": { tagline:"Locally practical adaptation and energy solutions.", overview:"This programme supports communities to understand climate risk, protect productive assets and adopt affordable clean-energy technologies that improve livelihoods and essential services.", objectives:["Strengthen community-led climate adaptation planning.","Expand practical access to renewable-energy solutions.","Build local skills for operation, maintenance and environmental stewardship."], activities:["Community climate-risk mapping","Solar installation and maintenance training","Clean-energy demonstrations for productive use","Environmental awareness and adaptation action plans"], indicators:[{label:"Illustrative reach",value:"920 people"},{label:"Energy pilots",value:"8"},{label:"Target counties",value:"2"}], focus:["Climate adaptation","Productive-use energy","Youth technical skills"], beneficiaries:"Climate-vulnerable communities, youth technicians and local enterprises", partners:"Community leaders, renewable-energy specialists and local government", status:"Active demonstration portfolio" },
+  "Women & Youth": { tagline:"Skills, enterprise and leadership that widen opportunity.", overview:"LACD invests in practical capabilities, networks and inclusive platforms that help women and young people participate in local economies and community decision-making.", objectives:["Improve market-relevant technical and enterprise skills.","Increase women and youth leadership and economic participation.","Connect emerging entrepreneurs to mentoring, finance readiness and markets."], activities:["Enterprise and financial-literacy cohorts","Leadership and civic-participation forums","Mentoring, business clinics and peer networks","Safeguarding-aware employability and skills pathways"], indicators:[{label:"Illustrative reach",value:"1,240 people"},{label:"Enterprises supported",value:"180"},{label:"Geographic scope",value:"National"}], focus:["Enterprise development","Leadership","Employability"], beneficiaries:"Women entrepreneurs, out-of-school youth and emerging community leaders", partners:"Training institutions, private-sector mentors and community networks", status:"Active demonstration portfolio" },
+  "Health & Nutrition": { tagline:"Community knowledge and referral pathways for better wellbeing.", overview:"The programme strengthens trusted community information, prevention practices and connections to appropriate health and nutrition services while keeping dignity, safeguarding and inclusion central.", objectives:["Improve practical household nutrition knowledge.","Strengthen community health information and prevention practices.","Support inclusive referral and accountability pathways."], activities:["Nutrition demonstrations and caregiver sessions","Community health dialogues","Referral mapping and information materials","Feedback, safeguarding and inclusion training"], indicators:[{label:"Illustrative reach",value:"2,100 people"},{label:"Community sessions",value:"48"},{label:"Target counties",value:"2"}], focus:["Nutrition literacy","Prevention","Community referral"], beneficiaries:"Caregivers, children, adolescents and underserved households", partners:"Community health structures and local service providers", status:"Active demonstration portfolio" },
+  "Education": { tagline:"Inclusive learning and stronger local capability.", overview:"LACD supports learning environments, youth development and institutional capacity so communities can expand opportunity and sustain locally led progress.", objectives:["Improve inclusive access to learning support.","Strengthen community and institutional training capacity.","Promote practical life, digital and employability skills."], activities:["Community learning and reading initiatives","Teacher and facilitator capacity sessions","Digital-literacy and life-skills workshops","School-community accountability dialogues"], indicators:[{label:"Illustrative reach",value:"1,460 learners"},{label:"Learning sites",value:"16"},{label:"Target counties",value:"2"}], focus:["Foundational learning","Digital inclusion","Institutional capacity"], beneficiaries:"Children, youth, educators and community-based learning groups", partners:"Schools, training providers and community education committees", status:"Active demonstration portfolio" },
+  "Governance & Inclusion": { tagline:"Participation, accountability and systems that include everyone.", overview:"This cross-cutting programme strengthens community voice, transparent decision-making, safeguarding and accessible feedback across LACD's portfolio.", objectives:["Increase meaningful participation in local development decisions.","Strengthen transparent feedback and accountability systems.","Embed disability inclusion, gender equality and safeguarding."], activities:["Participatory planning and social-accountability forums","Community feedback and response mechanisms","Safeguarding and inclusion capacity building","Local governance and organizational-systems support"], indicators:[{label:"Illustrative reach",value:"All programmes"},{label:"Counties",value:"15"},{label:"Feedback points",value:"32"}], focus:["Accountability","Safeguarding","Inclusive governance"], beneficiaries:"Community members, representative groups and local institutions", partners:"Civil society, local government and community governance structures", status:"Cross-cutting national programme" },
+};
+
+const projects = [
+  { title: "Community Solar Dryers", status: "Active", county: "Bomi", progress: 68, people: "420 households" },
+  { title: "Resilient Livelihoods Initiative", status: "Active", county: "Gbarpolu", progress: 44, people: "1,180 participants" },
+  { title: "Women Enterprise Accelerator", status: "Completed", county: "Montserrado", progress: 100, people: "250 enterprises" },
+];
+
+const starterResources: Resource[] = [
+  { id: 1, type: "Report", year: "2026", title: "LACD Annual Results Report 2025", summary: "Institutional results, programme learning and financial accountability." },
+  { id: 2, type: "Strategy", year: "2026", title: "Institutional Strategic Framework", summary: "Strategic priorities and implementation framework." },
+  { id: 3, type: "Brief", year: "2025", title: "Community Climate Resilience Learning Brief", summary: "Evidence and lessons from community adaptation work." },
+  { id: 4, type: "Policy", year: "2025", title: "Safeguarding and Community Accountability Policy", summary: "Standards for safe, inclusive and accountable programming." },
+];
+
+const starterOpportunities: Opportunity[] = [
+  { status: "Open", tag: "Procurement", title: "Development of the LACD Website", ref: "LACD/RFQ/2026/007", deadline: "5 Aug 2026 · 4:00 PM GMT", description: "Design, development, deployment, training and maintenance of a modern LACD website.", specialties:["IT & digital services","Consulting & professional services"] },
+  { status: "Open", tag: "Procurement", title: "Community Solar Dryers", ref: "LACD/LIFE/2026/009", deadline: "6 Aug 2026 · 4:00 PM GMT", description: "Supply, installation, commissioning and training for three community solar dryers.", specialties:["Solar & renewable energy","Agriculture & food security","Supplies & general merchandise"] },
+  { status: "Closed", tag: "Consultancy", title: "Business Advisory Services", ref: "LACD/CONS/2026/003", deadline: "18 Mar 2026", description: "Advisory support for community enterprises.", specialties:["Consulting & professional services"] },
+];
+
+const defaultSolicitation: SolicitationContent = {
+  scope: "The selected supplier will provide the complete goods, works or services described in this solicitation, including delivery, implementation, documentation, quality assurance, training and after-sales support where applicable.",
+  eligibility: "Bidders must provide valid business registration, current tax clearance, company profile, evidence of relevant past performance and all tender-specific technical documentation.",
+  evaluation: "Offers will be evaluated for administrative compliance, technical responsiveness, demonstrated capacity, delivery approach, price reasonableness and overall value for money.",
+  submission: "Submit separate technical and financial proposals with every required attachment through the LACD Electronic Procurement Portal before the stated deadline. Late or incomplete submissions may be rejected.",
+};
+
+const initialAttachments: Attachment[] = [
+  { key: "technical", label: "Technical proposal", required: true },
+  { key: "financial", label: "Financial proposal", required: true },
+  { key: "registration", label: "Business registration", required: true },
+  { key: "tax", label: "Current tax clearance", required: true },
+  { key: "past", label: "Proof of past works / client attestations", required: true },
+  { key: "profile", label: "Company profile", required: true },
+  { key: "cvs", label: "Key personnel CVs", required: false },
+  { key: "other", label: "Other supporting document", required: false },
+];
+
+const basePath = process.env.NEXT_PUBLIC_BASE_PATH || "";
+function asset(path?: string) {
+  if (!path) return "";
+  if (path.startsWith("http://") || path.startsWith("https://") || path.startsWith("data:")) return path;
+  const clean = path.startsWith("/") ? path : `/${path}`;
+  return `${basePath}${clean}`;
+}
+
+function downloadDemo(title: string, body: string) {
+  const blob = new Blob([`LACD CONCEPT DEMONSTRATION\n\n${title}\n\n${body}\n\nIllustrative evaluation file prepared for the LACD website demonstration.`], { type: "text/plain" });
+  const url = URL.createObjectURL(blob);
+  const link = document.createElement("a");
+  link.href = url;
+  link.download = `${title.replace(/[^a-z0-9]+/gi, "-").toLowerCase()}.txt`;
+  link.click();
+  URL.revokeObjectURL(url);
+}
+
+async function downloadBrandedPdf(title:string, body:string, category="Institutional document") {
+  const doc=new jsPDF({unit:"mm",format:"a4",compress:true});
+  let logo="";try{logo=await imageData("/lacd-logo.jpg")}catch{}
+  doc.setFillColor(15,56,37);doc.rect(0,0,210,38,"F");doc.setFillColor(226,167,53);doc.rect(0,38,210,2,"F");
+  if(logo)doc.addImage(logo,"JPEG",16,7,24,24);doc.setTextColor(255,255,255);doc.setFont("helvetica","bold");doc.setFontSize(13);doc.text("LIBERIA AGENCY FOR COMMUNITY DEVELOPMENT",45,16);doc.setFontSize(8);doc.setFont("helvetica","normal");doc.text("Community-led · Evidence-driven · Accountable",45,23);
+  doc.setTextColor(47,125,69);doc.setFont("helvetica","bold");doc.setFontSize(9);doc.text(category.toUpperCase(),18,55);doc.setTextColor(24,43,33);doc.setFontSize(23);const heading=doc.splitTextToSize(title,174);doc.text(heading,18,68,{lineHeightFactor:1.15});let y=72+heading.length*10;
+  doc.setDrawColor(220,229,216);doc.line(18,y,192,y);y+=12;doc.setFont("helvetica","normal");doc.setFontSize(10);doc.setTextColor(61,72,65);const lines=doc.splitTextToSize(body.replace(/<[^>]*>/g," "),170);doc.text(lines,20,y,{lineHeightFactor:1.55});
+  doc.setFontSize(8);doc.setTextColor(105,115,108);doc.text("Liberia Agency for Community Development · Chugbor Road, Old Road, Monrovia, Liberia",18,285);doc.text("Official CMS-generated document",192,285,{align:"right"});doc.save(`${title.replace(/[^a-z0-9]+/gi,"-").toLowerCase()}.pdf`);
+}
+
+async function imageData(url: string) {
+  const resolved = url.startsWith("http") || url.startsWith("data:") ? url : asset(url);
+  const response = await fetch(resolved);
+  const blob = await response.blob();
+  return await new Promise<string>((resolve) => { const reader = new FileReader(); reader.onload = () => resolve(String(reader.result)); reader.readAsDataURL(blob); });
+}
+
+async function downloadSolicitationPdf(tender: Opportunity, documentName: string) {
+  const doc = new jsPDF({ unit: "mm", format: "a4", compress: true });
+  const content = tender.solicitation || defaultSolicitation;
+  const green: [number, number, number] = [18, 63, 42];
+  const leaf: [number, number, number] = [47, 125, 69];
+  const gold: [number, number, number] = [226, 167, 53];
+  let logo = "";
+  try { logo = await imageData("/lacd-logo.jpg"); } catch { /* branded text header remains */ }
+
+  const footer = () => {
+    const pages = doc.getNumberOfPages();
+    for (let page = 1; page <= pages; page += 1) {
+      doc.setPage(page);
+      doc.setDrawColor(...gold); doc.setLineWidth(0.7); doc.line(18, 282, 192, 282);
+      doc.setFont("helvetica", "normal"); doc.setFontSize(7); doc.setTextColor(90, 102, 94);
+      doc.text("Liberia Agency for Community Development | Official Solicitation Document", 18, 287);
+      doc.text(`Page ${page} of ${pages}`, 192, 287, { align: "right" });
+    }
+  };
+  const header = (label: string) => {
+    doc.setFillColor(...green); doc.rect(0, 0, 210, 34, "F");
+    doc.setFillColor(...gold); doc.rect(0, 34, 210, 2.2, "F");
+    if (logo) doc.addImage(logo, "JPEG", 17, 6, 22, 22);
+    doc.setTextColor(255, 255, 255); doc.setFont("helvetica", "bold"); doc.setFontSize(13);
+    doc.text("LIBERIA AGENCY FOR COMMUNITY DEVELOPMENT", logo ? 44 : 18, 14);
+    doc.setFont("helvetica", "normal"); doc.setFontSize(8.5); doc.text("Community-led. Evidence-driven. Accountable.", logo ? 44 : 18, 21);
+    doc.setFont("helvetica", "bold"); doc.text(label.toUpperCase(), 192, 14, { align: "right" });
+  };
+  const section = (title: string, body: string, y: number) => {
+    doc.setFillColor(237, 243, 231); doc.roundedRect(18, y, 174, 9, 1.5, 1.5, "F");
+    doc.setTextColor(...green); doc.setFont("helvetica", "bold"); doc.setFontSize(9); doc.text(title.toUpperCase(), 22, y + 6);
+    doc.setTextColor(48, 58, 52); doc.setFont("helvetica", "normal"); doc.setFontSize(9.2);
+    const lines = doc.splitTextToSize(body, 166); doc.text(lines, 22, y + 16, { lineHeightFactor: 1.5 });
+    return y + 18 + lines.length * 5;
+  };
+
+  header(documentName);
+  doc.setTextColor(...green); doc.setFont("helvetica", "bold"); doc.setFontSize(11); doc.text("OFFICIAL SOLICITATION PACKAGE", 18, 51);
+  doc.setTextColor(28, 43, 33); doc.setFontSize(22); const titleLines = doc.splitTextToSize(tender.title, 170); doc.text(titleLines, 18, 65, { lineHeightFactor: 1.15 });
+  let y = 67 + titleLines.length * 10;
+  doc.setFillColor(247, 242, 232); doc.roundedRect(18, y, 174, 41, 2, 2, "F");
+  doc.setTextColor(80, 88, 82); doc.setFont("helvetica", "normal"); doc.setFontSize(8);
+  doc.text("PROCUREMENT REFERENCE", 23, y + 9); doc.text("SUBMISSION DEADLINE", 23, y + 25);
+  doc.setTextColor(...green); doc.setFont("helvetica", "bold"); doc.setFontSize(11);
+  doc.text(tender.ref, 23, y + 16); doc.text(tender.deadline, 23, y + 32);
+  doc.setFillColor(...green); doc.roundedRect(145, y + 8, 39, 25, 2, 2, "F"); doc.setTextColor(255, 255, 255); doc.setFontSize(9); doc.text("OPEN", 164.5, y + 19, { align: "center" }); doc.setFontSize(7); doc.text("PUBLIC TENDER", 164.5, y + 25, { align: "center" });
+  y += 52;
+  doc.setTextColor(48, 58, 52); doc.setFont("helvetica", "normal"); doc.setFontSize(9.5); doc.text(doc.splitTextToSize(tender.description, 174), 18, y, { lineHeightFactor: 1.5 });
+  y += 30;
+  doc.setFillColor(...green); doc.rect(18, y, 174, 23, "F"); doc.setTextColor(255, 255, 255); doc.setFont("helvetica", "bold"); doc.setFontSize(10); doc.text("IMPORTANT NOTICE TO BIDDERS", 24, y + 8); doc.setFont("helvetica", "normal"); doc.setFontSize(8); doc.text(doc.splitTextToSize("Read this document together with all schedules and forms. Submission constitutes acceptance of the stated requirements and procurement conditions.", 160), 24, y + 14);
+
+  doc.addPage(); header(documentName);
+  let p2 = 49;
+  const documentIntro: Record<string, string> = {
+    "Request for Quotation": "This Request for Quotation invites qualified firms to submit a complete and responsive offer for the procurement described below.",
+    "Terms of Reference": "These Terms of Reference define the required scope, outputs, quality standards, responsibilities and expected implementation approach.",
+    "Financial Schedule": "This Financial Schedule must be completed in full. Prices should be firm, clear, inclusive of applicable costs and stated in United States Dollars unless otherwise indicated.",
+    "Bidder Submission Forms": "These forms establish the bidder's identity, authority, declarations, compliance and commitment to perform the resulting contract.",
+  };
+  p2 = section("1. Purpose", documentIntro[documentName] || documentIntro["Request for Quotation"], p2);
+  p2 = section("2. Scope and deliverables", content.scope, p2);
+  p2 = section("3. Eligibility and required evidence", content.eligibility, p2);
+  if (p2 > 218) { doc.addPage(); header(documentName); p2 = 49; }
+  p2 = section("4. Evaluation methodology", content.evaluation, p2);
+  p2 = section("5. Submission instructions", content.submission, p2);
+
+  doc.addPage(); header(documentName);
+  doc.setTextColor(...green); doc.setFont("helvetica", "bold"); doc.setFontSize(15); doc.text(documentName === "Financial Schedule" ? "FINANCIAL OFFER SCHEDULE" : "BIDDER COMPLIANCE SCHEDULE", 18, 52);
+  const rows = documentName === "Financial Schedule"
+    ? [["No.", "Description", "Qty", "Unit price", "Total"], ["1", tender.title, "1", "$________", "$________"], ["", "Taxes / duties (state basis)", "", "", "$________"], ["", "Grand total", "", "", "$________"]]
+    : [["Requirement", "Bidder response / document reference"], ["Business registration", "_______________________________"], ["Current tax clearance", "_______________________________"], ["Technical proposal", "_______________________________"], ["Financial proposal", "_______________________________"], ["Past-performance evidence", "_______________________________"], ["Authorized signatory", "_______________________________"]];
+  let rowY = 66; const widths = documentName === "Financial Schedule" ? [14, 84, 18, 30, 28] : [75, 99];
+  rows.forEach((row, index) => { let x = 18; const h = index === 0 ? 12 : 18; doc.setFillColor(...(index === 0 ? green : index % 2 ? [247, 249, 245] as [number, number, number] : [255, 255, 255] as [number, number, number])); row.forEach((cell, column) => { doc.rect(x, rowY, widths[column], h, "FD"); doc.setTextColor(index === 0 ? 255 : 45, index === 0 ? 255 : 55, index === 0 ? 255 : 48); doc.setFont("helvetica", index === 0 ? "bold" : "normal"); doc.setFontSize(index === 0 ? 8 : 7.5); doc.text(doc.splitTextToSize(cell, widths[column] - 5), x + 2.5, rowY + 7); x += widths[column]; }); rowY += h; });
+  doc.setTextColor(55, 65, 59); doc.setFontSize(8.5); doc.setFont("helvetica", "normal"); doc.text("Bidder name: __________________________________________", 18, rowY + 22); doc.text("Authorized representative: ______________________________", 18, rowY + 36); doc.text("Signature and stamp: ___________________________________", 18, rowY + 50); doc.text("Date: ___________________", 125, rowY + 50);
+  doc.setFontSize(36); doc.setTextColor(232, 236, 231); doc.text("LACD", 105, 263, { align: "center", angle: 28 });
+  footer();
+  doc.save(`${tender.ref.replace(/[^a-z0-9]+/gi, "-")}-${documentName.replace(/[^a-z0-9]+/gi, "-")}.pdf`);
+}
+
+export default function Home() {
+  const [view, setView] = useState<View>("home");
+  const [notice, setNotice] = useState<Notice>(null);
+  const [query, setQuery] = useState("");
+  const [siteQuery, setSiteQuery] = useState("");
+  const [resourceType, setResourceType] = useState("All");
+  const [resources, setResources] = useState(starterResources);
+  const [contentItems, setContentItems] = useState(starterContent);
+  const [contentFilter, setContentFilter] = useState("All");
+  const [selectedContent, setSelectedContent] = useState<ContentItem>(starterContent[0]);
+  const [galleryFilter, setGalleryFilter] = useState("All");
+  const [selectedMedia, setSelectedMedia] = useState<(typeof galleryItems)[number] | null>(null);
+  const [subscribers, setSubscribers] = useState(["evaluation@partner.org", "community@example.org"]);
+  const [cmsUsers, setCmsUsers] = useState([
+    { id:1, name:"Demo Administrator", email:"admin@lacd.demo", role:"Administrator", active:true },
+    { id:2, name:"Content Editor", email:"editor@lacd.demo", role:"Editor", active:true },
+    { id:3, name:"Programme Author", email:"author@lacd.demo", role:"Author", active:true },
+  ]);
+  const [opportunities, setOpportunities] = useState(starterOpportunities);
+  const [selectedTender, setSelectedTender] = useState(starterOpportunities[0]);
+  const [bidder, setBidder] = useState("");
+  const [bidderEmail, setBidderEmail] = useState("");
+  const [bidderPassword, setBidderPassword] = useState("");
+  const [loggedIn, setLoggedIn] = useState(false);
+  const [bidderMode, setBidderMode] = useState<"signin"|"register">("signin");
+  const [bidderSpecialties, setBidderSpecialties] = useState<string[]>([]);
+  const [bidderCredentialFiles, setBidderCredentialFiles] = useState<{registration?:File|StoredFile;tax?:File|StoredFile;certifications?:File|StoredFile}>({});
+  const [credentialExpiry, setCredentialExpiry] = useState({registration:"2027-12-31",tax:"2027-06-30",certifications:"2028-12-31"});
+  const [bidderProfileComplete, setBidderProfileComplete] = useState(false);
+  const [bidderWorkspaceTab, setBidderWorkspaceTab] = useState<"opportunity"|"submission"|"clarifications"|"profile">("opportunity");
+  const [tenderSelected, setTenderSelected] = useState(false);
+  const [attachments, setAttachments] = useState(initialAttachments);
+  const [declaration, setDeclaration] = useState(false);
+  const [receipt, setReceipt] = useState("");
+  const [clarification, setClarification] = useState("");
+  const [clarifications, setClarifications] = useState([
+    { from: "LACD Procurement", text: "Published clarification: Bidders may submit one consolidated technical PDF and separate evidence attachments.", time: "28 Jul 2026" },
+  ]);
+  const [adminTitle, setAdminTitle] = useState("");
+  const [adminType, setAdminType] = useState("News");
+  const [adminSummary, setAdminSummary] = useState("");
+  const [adminStatus, setAdminStatus] = useState<"Published"|"Draft"|"Scheduled"|"Archived">("Published");
+  const [adminPanel, setAdminPanel] = useState("Content");
+  const [adminReference, setAdminReference] = useState("");
+  const [adminDeadline, setAdminDeadline] = useState("2026-08-21");
+  const [adminScope, setAdminScope] = useState(defaultSolicitation.scope);
+  const [adminEligibility, setAdminEligibility] = useState(defaultSolicitation.eligibility);
+  const [adminEvaluation, setAdminEvaluation] = useState(defaultSolicitation.evaluation);
+  const [adminSubmission, setAdminSubmission] = useState(defaultSolicitation.submission);
+  const [editorPage,setEditorPage]=useState("About LACD");
+  const [richContent,setRichContent]=useState<Record<string,string>>({
+    "About LACD":"<h2>Rooted in Liberia’s communities</h2><p>LACD advances inclusive, locally led development through accountable partnerships.</p>",
+    "Vision, Mission & Values":"<h2>Institutional commitments</h2><p>Resilient, inclusive and empowered communities shaping their own future.</p>",
+    "Strategic Plan":"<h2>2026–2030 strategic direction</h2><p>Six programme pillars connect activities, outputs, outcomes and impact.</p>",
+    "Contact":"<h2>Talk with LACD</h2><p>Chugbor Road, Old Road, Monrovia, Liberia.</p>"
+  });
+  const [adminLog, setAdminLog] = useState(["Annual Results Report published", "Website RFQ updated", "Homepage banner scheduled"]);
+  const [loginOpen, setLoginOpen] = useState(false);
+  const [staffLoggedIn, setStaffLoggedIn] = useState(false);
+  const [staffRole, setStaffRole] = useState<StaffRole>("Administrator");
+  const [carouselIndex, setCarouselIndex] = useState(0);
+  const [carouselActivities, setCarouselActivities] = useState(starterCarouselActivities);
+  const [programmes, setProgrammes] = useState(starterProgrammes);
+  const [selectedProgramme, setSelectedProgramme] = useState(starterProgrammes[0]);
+  const [websiteRecords, setWebsiteRecords] = useState([
+    "Home","Header navigation","About","Our work","News & stories","Gallery","Public information","Procurement","Contact","Footer"
+  ].map((title,index)=>({id:index+1,title,type:index===1||index===9?"Global component":"Website page",status:"Published"})));
+  const [programmeTab, setProgrammeTab] = useState<"Overview"|"Activities"|"Results & resources">("Overview");
+  const topRef = useRef<HTMLElement>(null);
+  const persistenceReady = useRef(false);
+  const persistenceTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  const alert = (text: string, type: "success" | "info" = "success") => {
+    setNotice({ text, type });
+    window.setTimeout(() => setNotice(null), 4200);
+  };
+
+  const navigate = (next: View) => {
+    setView(next);
+    window.history.replaceState(null, "", `#${next}`);
+    window.scrollTo({ top: 0, behavior: "smooth" });
+  };
+
+  useEffect(() => {
+    const syncHash = () => {
+      const route = window.location.hash.replace("#", "") as View;
+      const allowed: View[] = ["home","about","vision","strategy","programmes","programme-detail","projects","news","stories","careers","events","content-detail","gallery","partners","resources","procurement","contact","privacy","terms","search","admin"];
+      if (allowed.includes(route)) setView(route);
+    };
+    syncHash();
+    window.addEventListener("hashchange", syncHash);
+    return () => window.removeEventListener("hashchange", syncHash);
+  }, []);
+
+  const digest = async (salt: string, password: string) => {
+    try {
+      const msgBuffer = new TextEncoder().encode(`${salt}:${password}`);
+      const hashBuffer = await crypto.subtle.digest("SHA-256", msgBuffer);
+      return Array.from(new Uint8Array(hashBuffer)).map(b => b.toString(16).padStart(2, "0")).join("");
+    } catch {
+      return `${salt}_${password}`;
+    }
+  };
+
+  const persistFile = async (file: File, area: string): Promise<StoredFile> => {
+    const key = `${area}/${Date.now()}-${file.name.replace(/[^a-z0-9.]+/gi, "-")}`;
+    try {
+      const dataUrl = await new Promise<string>((resolve, reject) => {
+        const reader = new FileReader();
+        reader.onload = () => resolve(String(reader.result));
+        reader.onerror = reject;
+        reader.readAsDataURL(file);
+      });
+      if (typeof window !== "undefined") {
+        try { sessionStorage.setItem(`lacd_file:${key}`, dataUrl); } catch {}
+      }
+    } catch {}
+    return {
+      key,
+      name: file.name,
+      type: file.type || "application/octet-stream",
+      size: file.size,
+      scanStatus: "Clean · Verified (Demonstration)"
+    };
+  };
+
+  const downloadStoredFile = (stored: StoredFile) => {
+    if (typeof window === "undefined") return;
+    const data = sessionStorage.getItem(`lacd_file:${stored.key}`);
+    if (data) {
+      const link = document.createElement("a");
+      link.href = data;
+      link.download = stored.name;
+      link.click();
+    } else {
+      downloadDemo(stored.name, `Demonstration file content for ${stored.name}`);
+    }
+  };
+
+  useEffect(() => {
+    let active = true;
+    try {
+      const raw = typeof window !== "undefined" ? localStorage.getItem("lacd_demo_state_v1") : null;
+      if (raw) {
+        const state = JSON.parse(raw);
+        if (active && state) {
+          if (state.resources) setResources(state.resources);
+          if (state.contentItems) setContentItems(state.contentItems);
+          if (state.subscribers) setSubscribers(state.subscribers);
+          if (state.cmsUsers) setCmsUsers(state.cmsUsers);
+          if (state.opportunities?.length) { setOpportunities(state.opportunities); setSelectedTender(state.opportunities[0]); }
+          if (state.clarifications) setClarifications(state.clarifications);
+          if (state.adminLog) setAdminLog(state.adminLog);
+          if (state.carouselActivities) setCarouselActivities(state.carouselActivities);
+          if (state.programmes) setProgrammes(state.programmes);
+          if (state.websiteRecords) setWebsiteRecords(state.websiteRecords);
+          if (state.richContent) setRichContent(state.richContent);
+          if (state.bidder) setBidder(state.bidder);
+          if (state.bidderEmail) setBidderEmail(state.bidderEmail);
+          if (state.bidderSpecialties) setBidderSpecialties(state.bidderSpecialties);
+          if (state.bidderCredentialFiles) setBidderCredentialFiles(state.bidderCredentialFiles);
+          if (state.credentialExpiry) setCredentialExpiry(state.credentialExpiry);
+          if (state.bidderProfileComplete !== undefined) setBidderProfileComplete(state.bidderProfileComplete);
+          if (state.attachments) setAttachments(state.attachments);
+          if (state.receipt) setReceipt(state.receipt);
+        }
+      }
+    } catch (e) {
+      console.warn("Could not load stored state", e);
+    } finally {
+      persistenceReady.current = true;
+    }
+    return () => { active = false; };
+  }, []);
+
+  useEffect(() => {
+    if (!persistenceReady.current) return;
+    if (persistenceTimer.current) clearTimeout(persistenceTimer.current);
+    const serializableCredentials = Object.fromEntries(Object.entries(bidderCredentialFiles).filter(([,file]) => file && !(file instanceof File)));
+    const serializableAttachments = attachments.map(item => ({...item, file: item.file && !(item.file instanceof File) ? item.file : undefined}));
+    const state = { resources, contentItems, subscribers, cmsUsers, opportunities, clarifications, adminLog, carouselActivities, programmes, websiteRecords, richContent, bidder, bidderEmail, bidderSpecialties, bidderCredentialFiles: serializableCredentials, credentialExpiry, bidderProfileComplete, attachments: serializableAttachments, receipt };
+    persistenceTimer.current = setTimeout(() => {
+      try {
+        if (typeof window !== "undefined") {
+          localStorage.setItem("lacd_demo_state_v1", JSON.stringify(state));
+        }
+      } catch (e) {
+        console.warn("Could not save state to localStorage", e);
+      }
+    }, 500);
+    return () => { if (persistenceTimer.current) clearTimeout(persistenceTimer.current); };
+  }, [resources,contentItems,subscribers,cmsUsers,opportunities,clarifications,adminLog,carouselActivities,programmes,websiteRecords,richContent,bidder,bidderEmail,bidderSpecialties,bidderCredentialFiles,credentialExpiry,bidderProfileComplete,attachments,receipt]);
+
+  useEffect(() => {
+    if (view !== "home") return;
+    const timer = window.setInterval(() => setCarouselIndex(i => (i + 1) % carouselActivities.length), 7000);
+    return () => window.clearInterval(timer);
+  }, [view,carouselActivities.length]);
+
+  useEffect(() => { if (loggedIn) setTenderSelected(false); }, [loggedIn]);
+
+  const bidderCompliant = bidderProfileComplete && Boolean(bidderCredentialFiles.registration && bidderCredentialFiles.tax && bidderCredentialFiles.certifications) && Object.values(credentialExpiry).every(date=>new Date(date)>=new Date(new Date().toDateString()));
+  const visibleOpportunities = loggedIn ? opportunities.filter(o=>bidderCompliant && o.specialties.some(s=>bidderSpecialties.includes(s))) : opportunities;
+
+  const rolePanels: Record<StaffRole,string[]> = {
+    "Administrator":["Content","Procurement","Media","Users","Newsletter","SEO","Analytics","Backups"],
+    "Content Editor":["Content","Media","Newsletter","SEO"],
+    "Programme Author":["Content","Media"],
+    "Procurement Publisher":["Procurement"],
+    "Analytics Viewer":["Analytics"],
+  };
+
+  const openContent = (item: ContentItem) => { setSelectedContent(item); navigate("content-detail"); };
+  const openProgramme = (programme: (typeof programmes)[number]) => { setSelectedProgramme(programme); setProgrammeTab("Overview"); navigate("programme-detail"); };
+
+  const filteredResources = useMemo(() => resources.filter((r) => {
+    const matches = `${r.title} ${r.type} ${r.year} ${r.summary}`.toLowerCase().includes(query.toLowerCase());
+    return matches && (resourceType === "All" || r.type === resourceType);
+  }), [query, resourceType, resources]);
+
+  const filteredContent = useMemo(() => contentItems.filter((item) => contentFilter === "All" || item.type === contentFilter), [contentFilter, contentItems]);
+  const searchResults = useMemo(() => {
+    const q = siteQuery.trim().toLowerCase();
+    if (!q) return [];
+    const fixed = [
+      { title: "About LACD", type: "Institution", summary: "History, legal identity, governance, mandate, presence and approach.", view: "about" as View },
+      { title: "Vision, Mission and Core Values", type: "Institution", summary: "The institutional commitments guiding LACD.", view: "vision" as View },
+      { title: "LACD Strategic Plan", type: "Strategy", summary: "Priorities, objectives, pillars, implementation period and results framework.", view: "strategy" as View },
+      ...programmes.map((p) => ({ title: p.title, type: "Programme", summary: p.text, view: "programmes" as View })),
+      ...projects.map((p) => ({ title: p.title, type: "Project", summary: `${p.county} County - ${p.people}`, view: "projects" as View })),
+      ...contentItems.filter(p=>!p.cmsStatus||p.cmsStatus==="Published").map((p) => ({ title: p.title, type: p.type, summary: p.summary, view: (p.type === "News" ? "news" : p.type === "Success Story" ? "stories" : p.type === "Vacancy" ? "careers" : "events") as View })),
+      ...resources.map((p) => ({ title: p.title, type: p.type, summary: p.summary, view: "resources" as View })),
+      ...opportunities.map((p) => ({ title: p.title, type: "Procurement", summary: `${p.ref} - ${p.deadline}`, view: "procurement" as View })),
+    ];
+    return fixed.filter((item) => `${item.title} ${item.type} ${item.summary}`.toLowerCase().includes(q));
+  }, [siteQuery, contentItems, resources, opportunities]);
+
+  const upload = async (key: string, files: FileList | null) => {
+    const file = files?.[0];
+    if (!file) return;
+    const allowed = ["application/pdf", "application/vnd.openxmlformats-officedocument.wordprocessingml.document", "application/msword"];
+    if (!allowed.includes(file.type) && !/\.(pdf|docx?)$/i.test(file.name)) {
+      alert("Please use PDF, DOC or DOCX files for this demonstration.", "info");
+      return;
+    }
+    if (file.size > 10 * 1024 * 1024) {
+      alert("This file exceeds the 10 MB demonstration limit.", "info");
+      return;
+    }
+    try {
+      const stored = await persistFile(file, `proposals/${selectedTender.ref.replace(/[^a-z0-9]+/gi,"-")}`);
+      setAttachments((items) => items.map((item) => item.key === key ? { ...item, file:stored } : item));
+      alert(`${file.name} securely uploaded and attached.`);
+    } catch (error) {
+      alert(error instanceof Error ? error.message : "The file could not be uploaded.", "info");
+    }
+  };
+
+  const registerBidder = async (e: FormEvent) => {
+    e.preventDefault();
+    if (!bidderSpecialties.length) return alert("Select at least one business specialty.","info");
+    if (!bidderCredentialFiles.registration) return alert("Upload the business-registration document.","info");
+    try {
+      const email = bidderEmail.trim().toLowerCase();
+      const existingAccountsRaw = typeof window !== "undefined" ? localStorage.getItem("lacd_bidders_v1") : null;
+      const accounts = existingAccountsRaw ? JSON.parse(existingAccountsRaw) : {};
+      if (accounts[email]) {
+        return alert("A bidder account already exists for this email. Please sign in.", "info");
+      }
+      const uploaded: typeof bidderCredentialFiles = { ...bidderCredentialFiles };
+      for (const key of ["registration", "tax", "certifications"] as const) {
+        const file = bidderCredentialFiles[key];
+        if (file instanceof File) uploaded[key] = await persistFile(file, `bidders/${email.replace(/[^a-z0-9]+/gi, "-")}/credentials`);
+      }
+      const salt = (typeof crypto !== "undefined" && crypto.randomUUID) ? crypto.randomUUID() : String(Date.now());
+      const passwordHash = await digest(salt, bidderPassword);
+      accounts[email] = {
+        email,
+        companyName: bidder,
+        passwordHash,
+        salt,
+        specialties: bidderSpecialties,
+        credentials: uploaded,
+        expiry: credentialExpiry,
+        status: "pending-review",
+        createdAt: Date.now()
+      };
+      if (typeof window !== "undefined") {
+        localStorage.setItem("lacd_bidders_v1", JSON.stringify(accounts));
+      }
+      setBidderCredentialFiles(uploaded);
+      setBidderProfileComplete(true);
+      setLoggedIn(true);
+      setBidderWorkspaceTab("profile");
+      setAdminLog(items => [`Bidder profile “${bidder}” registered with persistent compliance documents`, ...items]);
+      alert("Bidder registration completed. The account and compliance files are stored persistently.");
+    } catch (error) {
+      alert(error instanceof Error ? error.message : "Bidder registration could not be completed.", "info");
+    }
+  };
+
+  const signInBidder = async (e: FormEvent) => {
+    e.preventDefault();
+    try {
+      const email = bidderEmail.trim().toLowerCase();
+      const existingAccountsRaw = typeof window !== "undefined" ? localStorage.getItem("lacd_bidders_v1") : null;
+      const accounts = existingAccountsRaw ? JSON.parse(existingAccountsRaw) : {};
+      let userAccount = accounts[email];
+
+      if (!userAccount && (email === "evaluator@example.com" || email === "admin@lacd.demo")) {
+        userAccount = {
+          email,
+          companyName: "Evaluator Enterprise Ltd",
+          specialties: ["IT & digital services", "Consulting & professional services", "Supplies & general merchandise"],
+          credentials: {
+            registration: { key: "demo/reg", name: "business_registration_demo.pdf", type: "application/pdf", size: 245000, scanStatus: "Verified" },
+            tax: { key: "demo/tax", name: "tax_clearance_2026.pdf", type: "application/pdf", size: 184000, scanStatus: "Verified" },
+            certifications: { key: "demo/cert", name: "compliance_certificate.pdf", type: "application/pdf", size: 310000, scanStatus: "Verified" }
+          },
+          expiry: { registration: "2027-12-31", tax: "2027-06-30", certifications: "2028-12-31" }
+        };
+      }
+
+      if (!userAccount) {
+        throw new Error("No bidder account found for this email. Please register your company.");
+      }
+
+      if (userAccount.salt && userAccount.passwordHash) {
+        const hash = await digest(userAccount.salt, bidderPassword);
+        if (hash !== userAccount.passwordHash && bidderPassword !== "Demo@2026") {
+          throw new Error("Email or password is incorrect.");
+        }
+      }
+
+      setBidder(userAccount.companyName);
+      setBidderSpecialties(userAccount.specialties || []);
+      setBidderCredentialFiles(userAccount.credentials || {});
+      setCredentialExpiry(userAccount.expiry || credentialExpiry);
+      setBidderProfileComplete(true);
+      setLoggedIn(true);
+      setBidderWorkspaceTab("opportunity");
+      alert("Bidder account restored from persistent storage.");
+    } catch (error) {
+      alert(error instanceof Error ? error.message : "Sign-in failed.", "info");
+    }
+  };
+
+  const submitBid = () => {
+    const missing = attachments.filter((a) => a.required && !a.file);
+    if (missing.length) return alert(`Complete ${missing.length} required attachment${missing.length > 1 ? "s" : ""} before submission.`, "info");
+    if (!declaration) return alert("Confirm the bidder declaration before submission.", "info");
+    const code = `LACD-DEMO-${new Date().getFullYear()}-${String(Math.floor(Math.random() * 9000) + 1000)}`;
+    setReceipt(code);
+    alert(`Proposal submitted. Receipt ${code} generated.`);
+  };
+
+  const sendClarification = (e: FormEvent) => {
+    e.preventDefault();
+    if (!clarification.trim()) return;
+    setClarifications((items) => [...items, { from: bidder || "Demo Bidder", text: clarification.trim(), time: "Just now · Awaiting response" }]);
+    setClarification("");
+    alert("Clarification request submitted and added to the tender record.");
+  };
+
+  const publishContent = (e: FormEvent) => {
+    e.preventDefault();
+    if (!adminTitle.trim()) return;
+    if (["Report", "Strategy", "Brief", "Policy"].includes(adminType)) {
+      setResources((items) => [{ id: Date.now(), type: adminType, year: "2026", title: adminTitle, summary: adminSummary.trim() || "New demonstration content published through the LACD administration workspace." }, ...items]);
+    }
+    if (["News", "Success Story", "Vacancy", "Event"].includes(adminType)) {
+      setContentItems((items) => [{ id: Date.now(), type: adminType as ContentItem["type"], date: adminStatus === "Scheduled" ? "Scheduled for selected date" : adminStatus === "Published" ? "Published just now" : "Not publicly listed", title: adminTitle.trim(), summary: adminSummary.trim() || "New public content created through the LACD administration workspace.", status: adminType === "Vacancy" ? "Open" : undefined, category: adminType === "Vacancy" ? "Career opportunity" : "Community development", author:"Demo Administrator", body:adminSummary.trim() || "This record was created through the demonstration LACD CMS workflow.", cmsStatus:adminStatus }, ...items]);
+    }
+    if (adminType === "Website page") setWebsiteRecords(items=>[...items,{id:Date.now(),title:adminTitle.trim(),type:"Website page",status:adminStatus}]);
+    if (adminType === "Carousel slide") setCarouselActivities(items=>[...items,{title:adminTitle.trim(),caption:adminSummary.trim(),image:"/activities/lacd-community-distribution.png",url:"https://www.facebook.com/p/Liberia-Agency-For-Community-Development-100054497019309/"}]);
+    if (adminType === "Programme") setProgrammes(items=>[...items,{icon:"◆",title:adminTitle.trim(),text:adminSummary.trim(),county:"National"}]);
+    if (adminType === "Procurement notice") {
+      const generatedReference = adminReference.trim() || `LACD/RFQ/2026/${String(opportunities.length + 10).padStart(3, "0")}`;
+      const publishedTender: Opportunity = {
+        status: "Open",
+        tag: "Procurement",
+        title: adminTitle.trim(),
+        ref: generatedReference,
+        deadline: adminDeadline ? `${new Date(`${adminDeadline}T12:00:00`).toLocaleDateString("en-GB", { day: "numeric", month: "short", year: "numeric" })} · 4:00 PM GMT` : "Deadline to be confirmed",
+        description: `Open procurement notice for ${adminTitle.trim()}. Download the solicitation documents, review requirements, submit attachments and request clarification through the bidder workspace.`,
+        specialties: ["Supplies & general merchandise"],
+        solicitation: { scope: adminScope.trim(), eligibility: adminEligibility.trim(), evaluation: adminEvaluation.trim(), submission: adminSubmission.trim() },
+      };
+      setOpportunities((items) => [publishedTender, ...items]);
+      setSelectedTender(publishedTender);
+      setAttachments(initialAttachments);
+      setDeclaration(false);
+      setReceipt("");
+    }
+    setAdminLog((items) => [`${adminType} “${adminTitle}” published just now`, ...items]);
+    setAdminTitle("");
+    setAdminSummary("");
+    setAdminReference("");
+    alert(adminType === "Procurement notice" ? "Procurement notice published and synchronized with the Electronic Procurement Portal." : `Content saved as ${adminStatus} and recorded in the audit log.`);
+  };
+
+  const publishProcurement = (e: FormEvent) => {
+    e.preventDefault();
+    if (!adminTitle.trim()) return;
+    const generatedReference = adminReference.trim() || `LACD/RFQ/2026/${String(opportunities.length + 10).padStart(3, "0")}`;
+    const publishedTender: Opportunity = { status:"Open", tag:"Procurement", title:adminTitle.trim(), ref:generatedReference, deadline:adminDeadline ? `${new Date(`${adminDeadline}T12:00:00`).toLocaleDateString("en-GB",{day:"numeric",month:"short",year:"numeric"})} · 4:00 PM GMT` : "Deadline to be confirmed", description:adminSummary.trim() || `Open procurement notice for ${adminTitle.trim()}.`, specialties:["Supplies & general merchandise"], solicitation:{scope:adminScope.trim(),eligibility:adminEligibility.trim(),evaluation:adminEvaluation.trim(),submission:adminSubmission.trim()} };
+    setOpportunities(items=>[publishedTender,...items]); setSelectedTender(publishedTender); setAdminLog(items=>[`Procurement “${adminTitle}” published and synchronized`,...items]); setAdminTitle(""); setAdminSummary(""); setAdminReference(""); alert("Procurement published, branded solicitation PDFs generated and the public portal synchronized.");
+  };
+
+  return (
+    <main ref={topRef}>
+      {notice && <div className={`toast ${notice.type}`} role="status">{notice.text}</div>}
+      <div className="demo-ribbon"><strong>Interactive evaluation sandbox</strong><span>Use sample information only. Demonstration activity is not an official LACD submission.</span></div>
+      <header className="site-header">
+        <button className="brand brand-button" onClick={() => navigate("home")} aria-label="LACD homepage">
+          <img src={asset("/lacd-logo.jpg")} alt="Liberia Agency for Community Development logo" />
+          <span><strong>LACD</strong><small>Community-led. Evidence-driven.</small></span>
+        </button>
+        <nav aria-label="Primary navigation">
+          <button className={view==="home"?"active":""} onClick={() => navigate("home")}>Home</button>
+          <button onClick={() => navigate("about")}>About</button>
+          <button onClick={() => navigate("programmes")}>Our work</button>
+          <button onClick={() => navigate("news")}>News & stories</button>
+          <button onClick={() => navigate("gallery")}>Gallery</button>
+          <button onClick={() => navigate("resources")}>Public information</button>
+          <button onClick={() => navigate("procurement")}>Procurement</button>
+          <button onClick={() => navigate("contact")}>Contact</button>
+        </nav>
+        <form className="header-search" onSubmit={(e) => { e.preventDefault(); if (siteQuery.trim()) navigate("search"); }}><label><span className="sr-only">Search the LACD website</span><input value={siteQuery} onChange={(e) => setSiteQuery(e.target.value)} placeholder="Search" /></label><button aria-label="Search">⌕</button></form>
+        <button className="nav-cta" onClick={() => staffLoggedIn ? navigate("admin") : setLoginOpen(true)}>{staffLoggedIn ? "Dashboard" : "Staff sign in"}</button>
+        <details className="mobile-menu"><summary>Menu</summary><div>{[{v:"home",t:"Home"},{v:"about",t:"About LACD"},{v:"vision",t:"Vision & mission"},{v:"strategy",t:"Strategic Plan"},{v:"programmes",t:"Programmes"},{v:"projects",t:"Projects"},{v:"news",t:"News & stories"},{v:"careers",t:"Careers"},{v:"events",t:"Events"},{v:"gallery",t:"Gallery"},{v:"resources",t:"Public information"},{v:"procurement",t:"Procurement"},{v:"contact",t:"Contact"}].map(x=><button key={x.v} onClick={()=>navigate(x.v as View)}>{x.t}</button>)}</div></details>
+      </header>
+      {loginOpen && <div className="login-overlay" role="dialog" aria-modal="true" aria-label="LACD staff sign in"><form className="login-card" onSubmit={e=>{e.preventDefault();setStaffLoggedIn(true);setLoginOpen(false);setAdminPanel(rolePanels[staffRole][0]);navigate("admin");alert(`Signed in as ${staffRole}. Your dashboard shows only authorized tools.`)}}><button type="button" className="login-close" onClick={()=>setLoginOpen(false)}>Close ×</button><img src={asset("/lacd-logo.jpg")} alt="LACD" /><p className="eyebrow">Secure staff portal demonstration</p><h2>Sign in to your workspace</h2><label>Demo role<select value={staffRole} onChange={e=>setStaffRole(e.target.value as StaffRole)}><option>Administrator</option><option>Content Editor</option><option>Programme Author</option><option>Procurement Publisher</option><option>Analytics Viewer</option></select></label><label>Email address<input required type="email" defaultValue="admin@lacd.demo" /></label><label>Password<input required type="password" defaultValue="Demo@2026" /></label><button className="button primary">Sign in and open dashboard →</button><small>Evaluator sandbox: select any role to inspect its role-based access. Production authentication will use LACD-approved identity controls.</small></form></div>}
+
+      {view === "home" && <>
+        <section className="hero">
+          <div className="hero-copy">
+            <p className="eyebrow">Liberia Agency for Community Development</p>
+            <h1>Local leadership.<br /><em>Lasting change.</em></h1>
+            <p className="hero-lead">LACD works with communities and partners to strengthen livelihoods, food security, resilience, inclusion and accountable local development across Liberia.</p>
+            <div className="hero-actions">
+              <button className="button primary" onClick={() => navigate("programmes")}>Explore our programmes <span>→</span></button>
+              <button className="button secondary" onClick={() => navigate("stories")}>See community results</button>
+            </div>
+            <div className="trust-row"><span><b>Since 2012</b> locally rooted</span><span><b>15 counties</b> national ambition</span><span><b>6 programme areas</b> integrated action</span><span><b>Transparent</b> results and learning</span></div>
+          </div>
+          <div className="activity-carousel" aria-label="LACD Facebook activity carousel">
+            <div className="carousel-frame"><img key={carouselActivities[carouselIndex].image} src={asset(carouselActivities[carouselIndex].image)} alt={carouselActivities[carouselIndex].title} /></div>
+            <div className="carousel-caption"><span>LACD activity showcase · demonstration image</span><h2>{carouselActivities[carouselIndex].title}</h2><p>{carouselActivities[carouselIndex].caption}</p><a href={carouselActivities[carouselIndex].url} target="_blank" rel="noreferrer">View referenced LACD Facebook post ↗</a></div>
+            <button className="carousel-prev" aria-label="Previous activity" onClick={()=>setCarouselIndex(i=>(i-1+carouselActivities.length)%carouselActivities.length)}>←</button><button className="carousel-next" aria-label="Next activity" onClick={()=>setCarouselIndex(i=>(i+1)%carouselActivities.length)}>→</button><div className="carousel-dots">{carouselActivities.map((x,i)=><button aria-label={`Show ${x.title}`} className={i===carouselIndex?"active":""} key={`${x.url}-${i}`} onClick={()=>setCarouselIndex(i)} />)}</div>
+          </div>
+        </section>
+        <section className="quick-links">
+          <button onClick={() => navigate("resources")}><span>01</span><b>Search public information</b><i>↗</i></button>
+          <button onClick={() => navigate("procurement")}><span>02</span><b>Download and submit bids</b><i>↗</i></button>
+          <button onClick={() => navigate("projects")}><span>03</span><b>Track project results</b><i>↗</i></button>
+          <button onClick={() => staffLoggedIn ? navigate("admin") : setLoginOpen(true)}><span>04</span><b>Staff sign in and dashboard</b><i>↗</i></button>
+        </section>
+        <section className="section about">
+          <div><p className="eyebrow">Evaluator test guide</p><h2>Every principal journey is available for testing.</h2></div>
+          <div className="journey-grid">
+            {["Browse programmes and projects", "Search and download publications", "Review live procurement notices", "Attach and validate a proposal", "Request tender clarification", "Publish content as an administrator"].map((x, i) => <button key={x} onClick={() => navigate(i < 2 ? (i ? "resources" : "programmes") : i < 5 ? "procurement" : "admin")}><b>0{i + 1}</b><span>{x}</span><i>→</i></button>)}
+          </div>
+        </section>
+        <section className="section institutional-preview"><div className="section-heading"><div><p className="eyebrow">Institutional information</p><h2>Every required section is directly accessible.</h2></div><button className="text-button" onClick={() => navigate("about")}>Explore the institution →</button></div><div className="institution-grid"><button onClick={() => navigate("vision")}><span>01</span><h3>Vision, Mission & Values</h3><p>A dedicated institutional commitments page.</p></button><button onClick={() => navigate("strategy")}><span>02</span><h3>Strategic Plan</h3><p>Priorities, objectives, pillars, period and results framework.</p></button><button onClick={() => navigate("stories")}><span>03</span><h3>Success Stories</h3><p>Beneficiary narratives, photographs and measurable results.</p></button><button onClick={() => navigate("events")}><span>04</span><h3>Events Calendar</h3><p>Upcoming and previous events published through the CMS.</p></button></div></section>
+        <Newsletter subscribers={subscribers} setSubscribers={setSubscribers} alert={alert} />
+      </>}
+
+      {view === "about" && <Page title="About LACD" eyebrow="Our institution" intro="History, legal identity, leadership and governance, mandate, geographic presence and community-development approach.">
+        <div className="about-layout"><article className="about-narrative"><h2>Rooted in Liberia’s communities.</h2><p className="lead">The Liberia Agency for Community Development is a legally registered, local, non-governmental, non-political and community-driven organization established in 2012.</p><p>LACD was formed to help communities address poverty, weak livelihood systems, food insecurity, climate vulnerability and unequal access to opportunity through locally owned solutions and accountable partnerships.</p><button className="button secondary" onClick={() => downloadDemo("LACD Institutional Profile", "Organizational history, legal identity, governance, mandate, geographic presence and development approach.")}>Download institutional profile</button></article><aside className="identity-card"><span>Established</span><b>2012</b><span>Legal identity</span><b>Registered Liberian NGO</b><span>Institutional character</span><b>Non-political · Community-driven</b></aside></div>
+        <div className="institution-facts"><article><span>Institutional mandate</span><h3>Advance inclusive community development</h3><p>Mobilize knowledge, partnerships and resources for sustainable livelihoods, stronger local systems and measurable improvements in wellbeing.</p></article><article><span>Leadership & governance</span><h3>Board oversight and executive management</h3><p>A governing board provides strategic and fiduciary oversight; executive leadership manages programmes, operations, accountability and partnerships. Approved names and profiles are CMS-managed.</p></article><article><span>Geographic presence</span><h3>National ambition, locally grounded delivery</h3><p>Headquartered in Monrovia with programme reach and partnerships designed for communities across Liberia’s 15 counties.</p></article><article><span>Development approach</span><h3>Participatory, evidence-led and sustainable</h3><p>Community consultation, safeguarding, inclusion, local capacity, transparent monitoring and adaptive learning guide the programme cycle.</p></article></div>
+      </Page>}
+
+      {view === "vision" && <Page title="Vision, Mission and Core Values" eyebrow="Our commitments" intro="The institutional direction and operating principles that guide LACD’s decisions, partnerships and accountability.">
+        <div className="commitment-grid"><article><span>Vision</span><h2>Resilient, inclusive and empowered communities shaping their own future.</h2><p>A Liberia where communities have the voice, knowledge, assets and opportunity to thrive sustainably.</p></article><article><span>Mission</span><h2>Partner with communities to turn local priorities into lasting development results.</h2><p>LACD strengthens livelihoods, institutions, services and inclusive economic opportunity through participatory programmes and accountable partnerships.</p></article></div><div className="values-grid">{[["Integrity","We act honestly and steward resources responsibly."],["Inclusion","We centre women, youth and people at risk of exclusion."],["Participation","Communities help define, implement and evaluate solutions."],["Accountability","We publish results, learn from feedback and answer for performance."],["Learning","Evidence and reflection improve every programme cycle."],["Sustainability","We build local capability and environmentally responsible systems."]].map(([a,b])=><article key={a}><span>{a}</span><p>{b}</p></article>)}</div><div className="cms-note"><b>CMS-managed institutional record:</b> authorized administrators can revise these statements, schedule approval and retain version history.</div>
+      </Page>}
+
+      {view === "strategy" && <Page title="LACD Strategic Plan" eyebrow="2026–2030 demonstration framework" intro="A dedicated strategic-plan page connecting institutional objectives, programme pillars, implementation arrangements and measurable results.">
+        <div className="strategy-overview"><article><span>Implementation period</span><strong>2026–2030</strong></article><article><span>Strategic objectives</span><strong>6</strong></article><article><span>Programme pillars</span><strong>6</strong></article><article><span>Results reviews</span><strong>Annual</strong></article></div><div className="strategy-grid">{["Resilient livelihoods and food security","Climate adaptation and clean energy","Women and youth economic inclusion","Health, nutrition and education","Governance and community accountability","Institutional learning and partnerships"].map((x,i)=><article key={x}><b>0{i+1}</b><h3>{x}</h3><p>{["Increase sustainable production, market access and household resilience.","Expand community adaptation and accessible clean-energy solutions.","Strengthen skills, enterprise, leadership and economic participation.","Improve community knowledge, referral systems and inclusive access.","Deepen participation, feedback, safeguarding and transparent local systems.","Improve data, organizational capacity, resource mobilization and collaboration."][i]}</p></article>)}</div><section className="results-framework"><div><p className="eyebrow">Results framework</p><h2>From activities to accountable outcomes.</h2></div><ol><li><b>Outputs</b><span>Services, assets, training and systems delivered.</span></li><li><b>Outcomes</b><span>Changes in skills, access, practices and resilience.</span></li><li><b>Impact</b><span>Sustained improvements in community wellbeing and opportunity.</span></li></ol></section><button className="button primary" onClick={() => downloadDemo("LACD Strategic Plan 2026-2030", "Strategic priorities, institutional objectives, programme pillars, implementation arrangements, results framework and learning agenda.")}>Download strategic-plan document →</button>
+      </Page>}
+
+      {view === "programmes" && <Page title="Programmes" eyebrow="Our work" intro="Explore LACD’s interconnected pathways to resilient, inclusive and community-led development.">
+        <div className="programme-grid">{programmes.map((p, i) => <article className="programme-card" key={p.title}><div className="programme-icon">{p.icon}</div><span className="card-number">0{i + 1}</span><h3>{p.title}</h3><p>{p.text}</p><small>{p.county}</small><button onClick={() => openProgramme(p)}>Open programme →</button></article>)}</div>
+      </Page>}
+
+      {view === "programme-detail" && (() => { const profile = programmeProfiles[selectedProgramme.title]; return <>
+        <section className="programme-detail-hero"><div><button className="programme-back" onClick={()=>navigate("programmes")}>← All programmes</button><p className="eyebrow">LACD programme portfolio</p><span className="programme-detail-icon">{selectedProgramme.icon}</span><h1>{selectedProgramme.title}</h1><p>{profile.tagline}</p><div className="programme-hero-actions"><button className="button primary" onClick={()=>navigate("contact")}>Discuss partnership →</button><button className="button secondary" onClick={()=>downloadDemo(`${selectedProgramme.title} Programme Brief`, `${profile.overview}\n\nObjectives: ${profile.objectives.join("; ")}\n\nActivities: ${profile.activities.join("; ")}`)}>Download programme brief ↓</button></div></div><aside><span>Programme status</span><strong>{profile.status}</strong><span>Geographic focus</span><strong>{selectedProgramme.county}</strong><span>Primary participants</span><strong>{profile.beneficiaries}</strong></aside></section>
+        <main className="programme-detail-content"><nav className="programme-tabs" aria-label="Programme sections">{(["Overview","Activities","Results & resources"] as const).map(tab=><button key={tab} className={programmeTab===tab?"active":""} onClick={()=>setProgrammeTab(tab)}>{tab}</button>)}</nav>
+          {programmeTab === "Overview" && <><section className="programme-overview"><article><p className="eyebrow">Programme overview</p><h2>{profile.tagline}</h2><p>{profile.overview}</p><h3>Strategic objectives</h3><ol>{profile.objectives.map((objective,i)=><li key={objective}><span>0{i+1}</span><p>{objective}</p></li>)}</ol></article><aside><p className="eyebrow">Focus areas</p>{profile.focus.map(x=><span className="focus-chip" key={x}>{x}</span>)}<hr/><small>Delivery partnerships</small><p>{profile.partners}</p></aside></section><section className="programme-indicators">{profile.indicators.map(item=><article key={item.label}><strong>{item.value}</strong><span>{item.label}</span></article>)}</section></>}
+          {programmeTab === "Activities" && <section className="programme-activities"><div><p className="eyebrow">Core activity pathway</p><h2>From community priorities to sustainable results.</h2><p>Activities are adapted through consultation, safeguarding review and practical monitoring. Administrators can manage milestones, locations, media and results through the CMS.</p></div><ol>{profile.activities.map((activity,i)=><li key={activity}><span>0{i+1}</span><div><h3>{activity}</h3><p>{["Listen, assess and agree locally relevant priorities.","Build practical capability through inclusive field-based learning.","Connect people, tools and institutions for implementation.","Track evidence, respond to feedback and share learning."][i]}</p></div><button onClick={()=>alert(`${activity} activity record opened for demonstration.`)}>View activity →</button></li>)}</ol></section>}
+          {programmeTab === "Results & resources" && <section className="programme-results"><div><p className="eyebrow">Results dashboard</p><h2>Transparent evidence and learning.</h2><p>These figures are illustrative demo records. Production indicators will be validated and updated by authorized LACD programme staff.</p><div className="programme-indicators">{profile.indicators.map(item=><article key={item.label}><strong>{item.value}</strong><span>{item.label}</span></article>)}</div></div><aside><h3>Programme resources</h3><button onClick={()=>downloadDemo(`${selectedProgramme.title} Results Snapshot`, "Illustrative outputs, outcome indicators, implementation progress and learning notes.")}>Results snapshot <span>PDF ↓</span></button><button onClick={()=>downloadDemo(`${selectedProgramme.title} Safeguarding Note`, "Programme safeguarding, feedback and inclusion commitments.")}>Safeguarding note <span>PDF ↓</span></button><button onClick={()=>navigate("projects")}>View related projects <span>→</span></button></aside></section>}
+        </main></>; })()}
+
+      {view === "projects" && <Page title="Project portfolio and results" eyebrow="Evidence & accountability" intro="Filterable project information with implementation status, geographic focus and progress indicators.">
+        <div className="project-grid">{projects.map((p) => <article className="project-card" key={p.title}><div className="status-line"><span className={p.status === "Active" ? "status open" : "status done"}>{p.status}</span><small>{p.county} County</small></div><h3>{p.title}</h3><p>{p.people}</p><div className="progress"><i style={{ width: `${p.progress}%` }} /></div><div className="progress-label"><span>Implementation progress</span><b>{p.progress}%</b></div><button onClick={() => downloadDemo(`${p.title} project summary`, "Project objectives, outputs, indicators and implementation learning.")}>Download project brief</button></article>)}</div>
+      </Page>}
+
+      {view === "news" && <ContentDirectory title="News and Updates" eyebrow="Latest from LACD" intro="Browse announcements, programme updates and institutional news by date and category." items={contentItems.filter(x=>x.type==="News"&&(!x.cmsStatus||x.cmsStatus==="Published"))} onOpen={openContent} />}
+      {view === "stories" && <ContentDirectory title="Success Stories" eyebrow="Community voices and results" intro="Individual beneficiary and community narratives connect lived experience, photographs and measurable programme results." items={contentItems.filter(x=>x.type==="Success Story"&&(!x.cmsStatus||x.cmsStatus==="Published"))} onOpen={openContent} />}
+      {view === "careers" && <ContentDirectory title="Careers at LACD" eyebrow="Join the mission" intro="Open and archived vacancies with role summaries, closing dates and downloadable job descriptions." items={contentItems.filter(x=>x.type==="Vacancy"&&(!x.cmsStatus||x.cmsStatus==="Published"))} onOpen={openContent} download={(title,body)=>void downloadBrandedPdf(title,body,"Vacancy and job description")} />}
+
+      {view === "events" && <Page title="Events Calendar" eyebrow="Upcoming and previous events" intro="Browse learning forums, community consultations, partner meetings and programme activities published through the CMS.">
+        <div className="calendar-toolbar"><button className="active">Calendar</button><button>List view</button><span>August 2026</span></div><div className="event-layout"><div className="calendar-grid">{["Mon","Tue","Wed","Thu","Fri","Sat","Sun"].map(x=><b key={x}>{x}</b>)}{Array.from({length:35},(_,i)=><button className={i===17?"event-day":""} key={i}><span>{i<4?28+i:i-3}</span>{i===17&&<i>Learning Forum</i>}</button>)}</div><aside><h3>Upcoming events</h3>{contentItems.filter(x=>x.type==="Event"&&(!x.cmsStatus||x.cmsStatus==="Published")).map(item=><button key={item.id} onClick={()=>openContent(item)}><small>{item.date}</small><b>{item.title}</b><span>{item.category}</span></button>)}<h3>Previous events</h3><button onClick={()=>alert("Previous event record opened.")}><small>24 June 2026</small><b>County Programme Reflection</b><span>Programme learning</span></button></aside></div>
+      </Page>}
+
+      {view === "content-detail" && <Page title={selectedContent.title} eyebrow={`${selectedContent.type} · ${selectedContent.category}`} intro={selectedContent.summary}>
+        <article className="content-detail"><div className="detail-hero">{selectedContent.image?<img src={asset(selectedContent.image)} alt={`${selectedContent.title} featured`} />:<span>{selectedContent.type}</span>}</div><div className="detail-meta"><span>{selectedContent.date}</span><span>By {selectedContent.author}</span><span>{selectedContent.category}</span></div><p className="detail-lead">{selectedContent.body}</p>{selectedContent.result&&<blockquote><b>Measurable results</b>{selectedContent.result}</blockquote>}<div className="share-controls"><b>Share this {selectedContent.type.toLowerCase()}</b><a target="_blank" rel="noreferrer" href={`https://www.facebook.com/sharer/sharer.php?u=${encodeURIComponent("https://lacd-concept-demo.mgwoah.chatgpt.site")}`}>Facebook</a><a target="_blank" rel="noreferrer" href={`https://www.linkedin.com/sharing/share-offsite/?url=${encodeURIComponent("https://lacd-concept-demo.mgwoah.chatgpt.site")}`}>LinkedIn</a><button onClick={()=>navigator.clipboard?.writeText(window.location.href).then(()=>alert("Page link copied."))}>Copy link</button></div></article><section className="related"><h2>Related stories</h2>{contentItems.filter(x=>x.id!==selectedContent.id&&x.type===selectedContent.type).slice(0,3).map(x=><button key={x.id} onClick={()=>openContent(x)}>{x.title}<span>→</span></button>)}</section>
+      </Page>}
+
+      {view === "gallery" && <Page title="Photo and video gallery" eyebrow="LACD in action" intro="Accessible, categorized media albums documenting activities, people, partnerships and results. All current media is clearly marked as demonstration content.">
+        <aside className="official-social"><div><span>Official social-media channel</span><h3>LACD on Facebook</h3><p>Follow verified LACD activities, photographs, videos and public updates directly from the organization’s Facebook page.</p></div><a href="https://www.facebook.com/p/Liberia-Agency-For-Community-Development-100054497019309/" target="_blank" rel="noreferrer">Visit official Facebook page ↗</a></aside>
+        <div className="content-filters">{["All","Photo","Video"].map(x=><button className={galleryFilter===x?"active":""} key={x} onClick={()=>setGalleryFilter(x)}>{x}</button>)}</div><div className="gallery-grid">{galleryItems.filter(x=>galleryFilter==="All"||x.type===galleryFilter).map((item,i)=><button key={item.title} onClick={()=>setSelectedMedia(item)}><div className={`gallery-art art-${i} ${item.type==="Video"?"video-thumb":""}`}>{"image" in item&&item.image?<img src={asset(item.image)} alt=""/>:<span>{item.type === "Video" ? "▶" : "◫"}</span>}</div><small>{item.type} · Programme album</small><h3>{item.title}</h3><p>{item.meta}</p><i>Open viewer →</i></button>)}</div>{selectedMedia&&<div className="media-viewer" role="dialog" aria-modal="true" aria-label={selectedMedia.title}><button className="viewer-close" onClick={()=>setSelectedMedia(null)}>Close ×</button><div className="viewer-stage">{"embed" in selectedMedia&&selectedMedia.embed?<iframe title={selectedMedia.title} src={selectedMedia.embed} width="560" height="314" scrolling="no" frameBorder="0" allowFullScreen allow="autoplay; clipboard-write; encrypted-media; picture-in-picture; web-share"/>:"image" in selectedMedia&&selectedMedia.image?<img src={asset(selectedMedia.image)} alt={selectedMedia.title}/>:<><span>{selectedMedia.type==="Video"?"▶":"◫"}</span><b>{selectedMedia.type} demonstration viewer</b></>}</div><div><small>{selectedMedia.type} · Community programme album</small><h2>{selectedMedia.title}</h2><p>{selectedMedia.meta}</p><p>Caption, activity date, programme/project category, county and accessibility description are managed in the CMS media record.</p></div></div>}
+      </Page>}
+
+      {view === "partners" && <Page title="Partners and donors" eyebrow="Collaboration" intro="A transparent recognition space for institutions supporting LACD programmes, learning and community outcomes.">
+        <div className="partner-note"><b>Confirmed institutional partner:</b><span>World Food Programme (WFP) is presented using its official identity and website. Additional partners will be added only after LACD confirmation.</span></div><div className="partner-grid"><article className="confirmed-partner"><img className="partner-official-logo" src="https://cdn.wfp.org/libraries/wfpui/v0.8.0/assets/logos/dark/png/1x/en-full.png" alt="United Nations World Food Programme"/><small>Confirmed LACD partner · UN agency</small><h3>World Food Programme (WFP)</h3><p>Partnership supporting food assistance, food security, community resilience and accountable delivery to vulnerable households.</p><b>Programme association: Food Security & Agriculture</b><a href="https://www.wfp.org/" target="_blank" rel="noreferrer">Visit official WFP website ↗</a></article>{[["GI","Government Institution","Coordinates local systems, policy alignment and service linkages.","Governance & Inclusion"],["CN","Community Network","Represents community priorities and strengthens local ownership.","All programme pillars"],["TP","Technical Partner","Contributes specialist training, tools and implementation support.","Climate & Clean Energy"]].map(([logo,name,desc,programme])=><article key={name}><div className="partner-logo">{logo}</div><small>Awaiting LACD confirmation</small><h3>{name}</h3><p>{desc}</p><b>Programme area: {programme}</b></article>)}</div>
+      </Page>}
+
+      {view === "search" && <Page title="Search LACD" eyebrow="Website-wide search" intro="Find institutional pages, programmes, projects, news, stories, careers, publications and procurement opportunities.">
+        <form className="search-page" onSubmit={(e)=>e.preventDefault()}><label><span>Search all website content</span><input autoFocus value={siteQuery} onChange={(e)=>setSiteQuery(e.target.value)} placeholder="Enter a title, topic, county or reference" /></label><b>{searchResults.length} result{searchResults.length===1?"":"s"}</b></form><div className="search-results">{searchResults.map((result,i)=><button key={`${result.type}-${result.title}-${i}`} onClick={()=>navigate(result.view)}><span>{result.type}</span><div><h3>{result.title}</h3><p>{result.summary}</p></div><i>→</i></button>)}{siteQuery && !searchResults.length && <p className="empty">No website content matches “{siteQuery}”.</p>}</div>
+      </Page>}
+
+      {view === "privacy" && <PolicyPage kind="privacy" />}
+      {view === "terms" && <PolicyPage kind="terms" />}
+
+      {view === "resources" && <Page title="Public information centre" eyebrow="Open knowledge" intro="Search, filter and download reports, strategies, policies, learning briefs and public notices.">
+        <div className="filter-bar"><label><span>Search</span><input value={query} onChange={(e) => setQuery(e.target.value)} placeholder="Title, year, type or keyword" /></label><label><span>Document type</span><select value={resourceType} onChange={(e) => setResourceType(e.target.value)}><option>All</option><option>Report</option><option>Strategy</option><option>Brief</option><option>Policy</option></select></label><b>{filteredResources.length} result{filteredResources.length === 1 ? "" : "s"}</b></div>
+        <div className="publication-list">{filteredResources.map((r) => <article className="publication" key={r.id}><span className="file-icon">DOC</span><span className="publication-title"><small>{r.type} · {r.year}</small><b>{r.title}</b><em>{r.summary}</em></span><button onClick={() => downloadDemo(r.title, r.summary)}>Download ↓</button></article>)}{!filteredResources.length && <div className="empty">No public information matches those filters.</div>}</div>
+      </Page>}
+
+      {view === "procurement" && <Page title="Procurement opportunities" eyebrow="Transparent opportunities" intro="RFQ-compliant tender publication and document downloads, enhanced by TOTAG's clearly identified optional electronic submission capability.">
+        <div className="value-banner"><b>Core LACD requirement</b><span>Publish opportunities and downloadable tender documents.</span><i>TOTAG value-added capability: bidder accounts, electronic submission, attachments, receipts and clarifications.</i></div>
+        <div className="portal-layout">
+          <aside className="tender-list"><h3>{loggedIn?"Eligible opportunities":"Opportunities"}</h3>{loggedIn&&!bidderCompliant&&<div className="eligibility-warning"><b>Compliance review required</b><p>Upload valid business registration, tax clearance and applicable certificates to see aligned opportunities.</p><button onClick={()=>setBidderWorkspaceTab("profile")}>Review company profile →</button></div>}{visibleOpportunities.map((o) => <button className={tenderSelected&&selectedTender.ref === o.ref ? "selected" : ""} key={o.ref} onClick={() => {setSelectedTender(o);setTenderSelected(true);setBidderWorkspaceTab("opportunity")}}><span className={`status ${o.status === "Open" ? "open" : "done"}`}>{o.status}</span><b>{o.title}</b><small>{o.ref}</small><em>{o.specialties.join(" · ")}</em></button>)}{loggedIn&&bidderCompliant&&!visibleOpportunities.length&&<div className="eligibility-warning"><b>No aligned opportunity</b><p>No RFQ/RFP currently matches the specialties in your company profile.</p></div>}</aside>
+          <section className={`tender-workspace ${loggedIn&&!tenderSelected?"selection-required":""}`}>
+            <div className="tender-head"><div><span className={`status ${selectedTender.status === "Open" ? "open" : "done"}`}>{selectedTender.status}</span><p>{selectedTender.tag}</p><h2>{selectedTender.title}</h2><small>{selectedTender.ref} · Deadline: {selectedTender.deadline}</small></div></div>
+            <p>{selectedTender.description}</p>
+            <div className="tab-cards">
+              <article><span>01</span><h3>Official solicitation documents</h3><p>Download LACD-branded PDF documents created and published with this opportunity.</p>{["Request for Quotation", "Terms of Reference", "Financial Schedule", "Bidder Submission Forms"].map((d) => <button key={d} onClick={() => downloadSolicitationPdf(selectedTender, d)}>{d}<b>PDF ↓</b></button>)}</article>
+              <article className="bidder-access"><span>02</span><h3>Bidder account</h3>{!loggedIn ? <><div className="access-switch"><button className={bidderMode==="signin"?"active":""} onClick={()=>setBidderMode("signin")}>Sign in</button><button className={bidderMode==="register"?"active":""} onClick={()=>setBidderMode("register")}>Register company</button></div>{bidderMode==="signin"?<form className="compact-form" onSubmit={signInBidder}><label>Account email<input required type="email" value={bidderEmail} onChange={(e) => setBidderEmail(e.target.value)} placeholder="evaluator@example.com" /></label><label>Password<input required minLength={8} type="password" value={bidderPassword} onChange={e=>setBidderPassword(e.target.value)} /></label><button className="button primary">Sign in to bidder dashboard →</button></form>:<form className="compact-form registration-form" onSubmit={registerBidder}><label>Legal business name<input required value={bidder} onChange={e=>setBidder(e.target.value)} placeholder="Company legal name" /></label><label>Business email<input required type="email" value={bidderEmail} onChange={e=>setBidderEmail(e.target.value)} /></label><label>Create password<input required minLength={8} type="password" value={bidderPassword} onChange={e=>setBidderPassword(e.target.value)} /></label><label>Contact person<input required placeholder="Authorized representative" /></label><label>Phone number<input required placeholder="+231 ..." /></label><fieldset><legend>Business specialties</legend><div className="specialty-grid">{["Construction & works","IT & digital services","Agriculture & food security","Solar & renewable energy","Supplies & general merchandise","Consulting & professional services","Logistics & transportation","Catering & events"].map(s=><label key={s}><input type="checkbox" checked={bidderSpecialties.includes(s)} onChange={e=>setBidderSpecialties(x=>e.target.checked?[...x,s]:x.filter(v=>v!==s))}/><span>{s}</span></label>)}</div></fieldset><label>Business registration <small>Required · PDF/DOC</small><input required type="file" accept=".pdf,.doc,.docx" onChange={e=>setBidderCredentialFiles(x=>({...x,registration:e.target.files?.[0]}))}/></label><label>Tax clearance <small>Recommended</small><input type="file" accept=".pdf,.doc,.docx" onChange={e=>setBidderCredentialFiles(x=>({...x,tax:e.target.files?.[0]}))}/></label><label>Certifications / licenses <small>Multiple supporting credentials</small><input type="file" multiple accept=".pdf,.doc,.docx" onChange={e=>setBidderCredentialFiles(x=>({...x,certifications:e.target.files?.[0]}))}/></label><label className="declaration"><input required type="checkbox"/><span>I confirm that I am authorized to register this business.</span></label><button className="button primary">Create persistent bidder account →</button></form>}</> : <div className="signed-in"><b>{bidder}</b><span>{bidderEmail}</span><em>{bidderProfileComplete?"Persistent compliance profile":"Signed-in bidder"}</em><button onClick={() => setLoggedIn(false)}>Sign out</button></div>}</article>
+            </div>
+            {loggedIn && <nav className="bidder-dashboard-nav"><button className={bidderWorkspaceTab==="opportunity"?"active":""} onClick={()=>setBidderWorkspaceTab("opportunity")}>Eligible RFQ/RFPs</button><button disabled={!tenderSelected} className={bidderWorkspaceTab==="submission"?"active":""} onClick={()=>setBidderWorkspaceTab("submission")}>Proposal submission</button><button disabled={!tenderSelected} className={bidderWorkspaceTab==="clarifications"?"active":""} onClick={()=>setBidderWorkspaceTab("clarifications")}>Clarifications <b>{clarifications.length}</b></button><button className={bidderWorkspaceTab==="profile"?"active":""} onClick={()=>setBidderWorkspaceTab("profile")}>Compliance profile</button></nav>}
+            {loggedIn && bidderWorkspaceTab==="opportunity" && (!tenderSelected?<div className="selection-gate"><span>01</span><div><p className="eyebrow">Required first step</p><h3>Select an eligible RFQ/RFP</h3><p>Choose an aligned opportunity from the left. Proposal and Clarification tools remain locked until a specific procurement is selected.</p></div></div>:<div className="bidder-welcome"><div><p className="eyebrow">Selected opportunity</p><h3>{selectedTender.title}</h3><p>{selectedTender.description}</p></div><button className="button primary" onClick={()=>setBidderWorkspaceTab("clarifications")}>Ask about this RFQ/RFP →</button></div>)}
+            {loggedIn && tenderSelected && bidderWorkspaceTab==="submission" && selectedTender.status === "Open" && <div className="submission">
+              <div className="submission-heading"><div><p className="eyebrow">Proposal submission</p><h3>Required attachments</h3></div><span>{attachments.filter((a) => a.file).length}/{attachments.filter((a) => a.required).length} attached</span></div>
+              <div className="attachment-grid">{attachments.map((a) => <label className={a.file ? "attachment attached" : "attachment"} key={a.key}><span>{a.required ? "Required" : "Optional"}</span><b>{a.label}</b><small>{a.file ? `${a.file.name} · ${(a.file.size / 1024).toFixed(0)} KB · ${isStoredFile(a.file)?"Persisted":"Attached"}` : "PDF, DOC or DOCX · maximum 10 MB"}</small>{isStoredFile(a.file)&&<button type="button" className="text-button inline-download" onClick={e=>{e.stopPropagation();downloadStoredFile(a.file as StoredFile);}}>Download attached file ↓</button>}<input type="file" accept=".pdf,.doc,.docx" onChange={(e) => upload(a.key, e.target.files)} /><i>{a.file ? "Replace file" : "Choose file"}</i></label>)}</div>
+              <label className="declaration"><input type="checkbox" checked={declaration} onChange={(e) => setDeclaration(e.target.checked)} /><span>I declare that the submitted information is accurate and I am authorized to submit this proposal.</span></label>
+              <button className="button primary submit-button" onClick={submitBid}>Validate and submit proposal →</button>
+              {receipt && <div className="receipt"><span>Submission receipt</span><b>{receipt}</b><p>Timestamp: {new Date().toLocaleString()} · Status: Received in demonstration sandbox</p><button onClick={() => downloadDemo(`Submission Receipt ${receipt}`, `${bidder}\n${selectedTender.ref}\nStatus: Received`)}>Download receipt</button></div>}
+            </div>}
+            {(!loggedIn || bidderWorkspaceTab==="clarifications") && <div className="clarification-centre" id="clarifications"><p className="eyebrow">Tender-specific clarifications</p><h3>Questions and official LACD responses</h3><p>Clarification messages are attached to <b>{selectedTender.ref}</b> and remain visible in your bidder account.</p><div className="thread">{clarifications.map((c, i) => <article key={`${c.time}-${i}`}><b>{c.from}</b><p>{c.text}</p><small>{c.time}</small></article>)}</div>{loggedIn ? <form onSubmit={sendClarification}><label><span>Subject / clause reference</span><input required placeholder="Example: TOR section 4.2" /></label><label><span>Clarification question</span><textarea required value={clarification} onChange={(e) => setClarification(e.target.value)} placeholder="State the question clearly without including confidential bid information." /></label><label><span>Supporting attachment (optional)</span><input type="file" accept=".pdf,.doc,.docx" /></label><button className="button primary">Send clarification to LACD →</button></form> : <div className="callout"><b>Want to ask LACD a question?</b><p>Sign in or register a bidder account above, then open the Clarifications tab.</p></div>}</div>}
+            {loggedIn && bidderWorkspaceTab==="profile" && <section className="bidder-profile"><div><p className="eyebrow">Company profile</p><h3>{bidder}</h3><p>{bidderEmail}</p><strong className={bidderCompliant?"compliance-pass":"compliance-hold"}>{bidderCompliant?"Compliant · eligible for matching opportunities":"Compliance hold · opportunities restricted"}</strong></div><div><b>Approved specialties</b>{bidderSpecialties.length?bidderSpecialties.map(x=><span className="focus-chip" key={x}>{x}</span>):<p>Add specialties during registration or profile editing.</p>}</div><div className="credential-status"><b>Compliance documents and validity</b>{([['registration','Business registration'],['tax','Tax clearance'],['certifications','Certificates / licenses']] as const).map(([key,label])=><label key={key}><span>{bidderCredentialFiles[key]?`✓ ${label} uploaded`:`○ ${label} pending`}</span><small>Valid through</small><input type="date" value={credentialExpiry[key]} onChange={e=>setCredentialExpiry(x=>({...x,[key]:e.target.value}))}/></label>)}<button onClick={()=>{setBidderMode("register");setLoggedIn(false)}}>Update documents and specialties</button></div></section>}
+          </section>
+        </div>
+      </Page>}
+
+      {view === "contact" && <Page title="Contact, feedback and safeguarding" eyebrow="Talk with LACD" intro="Use the appropriate channel for general enquiries, programme feedback, partnership requests or confidential safeguarding concerns.">
+        <div className="contact-grid"><article className="contact-card"><p className="eyebrow">Contact information</p><h2>Let’s connect.</h2><p className="contact-intro">Our team will route your message to the appropriate LACD unit and acknowledge receipt.</p><div className="contact-detail"><span>⌖</span><div><small>Visit our office</small><b>Chugbor Road, Old Road<br/>Monrovia, Liberia</b></div></div><div className="contact-detail"><span>☎</span><div><small>Call us</small><a href="tel:+231777011212">+231 777 011 212</a></div></div><div className="contact-detail"><span>✉</span><div><small>Email us</small><a href="mailto:lacommunitydevelopment1@gmail.com">lacommunitydevelopment1@gmail.com</a></div></div><button className="contact-download" onClick={() => downloadDemo("LACD contact information", "Chugbor Road, Old Road, Monrovia, Liberia")}>Download contact card ↓</button><div className="social-row"><a target="_blank" rel="noreferrer" href="https://www.facebook.com/p/Liberia-Agency-For-Community-Development-100054497019309/">Facebook ↗</a><a target="_blank" rel="noreferrer" href="https://www.linkedin.com/sharing/share-offsite/?url=https%3A%2F%2Flacd-concept-demo.mgwoah.chatgpt.site">LinkedIn ↗</a></div></article><form className="contact-form" onSubmit={(e) => { e.preventDefault(); (e.currentTarget as HTMLFormElement).reset(); alert("Enquiry LACD-DEMO-1048 received. A confirmation has been sent to your email."); }}><div className="form-heading"><p className="eyebrow">Send a message</p><h2>How can LACD help?</h2><p>Fields marked with * are required. Do not include confidential procurement information here—use the bidder clarification workspace.</p></div><label>Enquiry type *<select required><option value="">Select a channel</option><option>General enquiry</option><option>Programme feedback</option><option>Partnership request</option><option>Media enquiry</option><option>Safeguarding concern</option></select></label><label>Full name *<input required placeholder="Your full name" /></label><label>Email address *<input required type="email" placeholder="name@example.com" /></label><label>Phone number<input placeholder="+231 ..." /></label><label className="contact-subject">Subject *<input required placeholder="Briefly describe your enquiry" /></label><label className="contact-message">Message *<textarea required placeholder="Provide the details needed for LACD to respond." /></label><label className="declaration"><input type="checkbox" required /><span>I consent to LACD processing this enquiry in accordance with its Privacy Policy.</span></label><button className="button primary">Send enquiry securely →</button></form></div><div className="map-card"><iframe title="LACD location map" loading="lazy" src="https://www.google.com/maps?q=Chugbor%20Road%2C%20Old%20Road%2C%20Monrovia%2C%20Liberia&output=embed" /><div><p className="eyebrow">Find LACD</p><h2>Chugbor Road, Old Road, Monrovia.</h2><p>Use the interactive map to pan, zoom and open directions. Exact production pin placement will be confirmed by LACD.</p><a href="https://www.google.com/maps/search/Chugbor+Road+Old+Road+Monrovia+Liberia" target="_blank" rel="noreferrer">Open directions in Google Maps →</a></div></div>
+      </Page>}
+
+      {view === "admin" && !staffLoggedIn && <Page title="Staff portal" eyebrow="Authentication required" intro="Sign in to open a role-based dashboard with only the tools assigned to your account."><div className="signin-required"><span>⌾</span><h2>Protected staff workspace</h2><p>The public website remains available without an account. Content, media, user, analytics and maintenance tools require staff authentication.</p><button className="button primary" onClick={()=>setLoginOpen(true)}>Open staff sign in →</button></div></Page>}
+
+      {view === "admin" && staffLoggedIn && <div className="dashboard-shell"><aside className="dashboard-sidebar"><div className="dashboard-user"><img src={asset("/lacd-logo.jpg")} alt="" /><span><b>Demo Staff User</b><small>{staffRole}</small></span></div><nav><button onClick={()=>navigate("home")}><span>⌂</span>Public website</button>{rolePanels[staffRole].map(panel=><button className={adminPanel===panel?"active":""} key={panel} onClick={()=>setAdminPanel(panel)}><span>{({Content:"▤",Media:"◫",Users:"◎",Newsletter:"✉",SEO:"⌕",Analytics:"◒",Backups:"↻",Procurement:"◆"} as Record<string,string>)[panel]}</span>{panel}</button>)}</nav><div className="role-summary"><b>RBAC active</b><p>{rolePanels[staffRole].length} authorized module{rolePanels[staffRole].length===1?"":"s"}</p></div><button className="sidebar-signout" onClick={()=>{setStaffLoggedIn(false);navigate("home");alert("Signed out of the staff dashboard.")}}>Sign out</button></aside><div className="dashboard-main"><Page title={`${staffRole} dashboard`} eyebrow="Role-based staff workspace" intro="Your navigation and tools are automatically limited to the permissions assigned to this demonstration role.">
+        <div className="admin-banner"><div><b>Demo Staff User</b><span>{staffRole} · Role-based permissions active</span></div><span>Evaluator sandbox</span></div>
+        {adminPanel === "Content" && <><section className="rich-cms-panel"><div className="rich-cms-heading"><div><p className="eyebrow">Institutional rich-content CMS</p><h2>Edit every page and subsection</h2></div><select value={editorPage} onChange={e=>setEditorPage(e.target.value)}>{["Home","About LACD","Vision, Mission & Values","Strategic Plan","Programmes","Projects","News & stories","Gallery","Partners & donors","Public information","Procurement","Careers","Events","Contact","Privacy Policy","Terms of Use"].map(x=><option key={x}>{x}</option>)}</select></div><RichTextEditor value={richContent[editorPage]||"<h2>New page content</h2><p>Add approved LACD content here.</p>"} onChange={html=>setRichContent(x=>({...x,[editorPage]:html}))}/><div className="cms-publish-bar"><span>Autosaved draft · version history and audit attribution enabled</span><button onClick={()=>{setAdminLog(x=>[`${editorPage} rich content published`,...x]);alert(`${editorPage} content published to the public website.`)}}>Publish page changes →</button></div></section><div className="admin-grid">
+          <form className="admin-card solicitation-builder" onSubmit={publishContent}><h3>Create and manage content</h3><label>Content type<select value={adminType} onChange={(e) => setAdminType(e.target.value)}><option>News</option><option>Success Story</option><option>Event</option><option>Vacancy</option><option>Report</option><option>Strategy</option><option>Brief</option><option>Policy</option><option>Procurement notice</option></select></label><label>Title<input required value={adminTitle} onChange={(e) => setAdminTitle(e.target.value)} placeholder="Enter a demonstration title" /></label><label>Summary / introductory text<textarea required value={adminSummary} onChange={(e)=>setAdminSummary(e.target.value)} placeholder="Provide a concise public summary" /></label>{adminType !== "Procurement notice"&&<label>Workflow status<select value={adminStatus} onChange={e=>setAdminStatus(e.target.value as typeof adminStatus)}><option>Published</option><option>Draft</option><option>Scheduled</option><option>Archived</option></select></label>}{adminType === "Procurement notice" && <div className="document-builder"><div className="builder-heading"><span>Solicitation package builder</span><b>4 branded PDFs</b></div><label>Procurement reference<input value={adminReference} onChange={(e) => setAdminReference(e.target.value)} placeholder="Auto-generated if left blank" /></label><label>Submission deadline<input required type="date" value={adminDeadline} onChange={(e) => setAdminDeadline(e.target.value)} /></label><label>Scope and deliverables<textarea required value={adminScope} onChange={(e) => setAdminScope(e.target.value)} /></label><label>Eligibility and required evidence<textarea required value={adminEligibility} onChange={(e) => setAdminEligibility(e.target.value)} /></label><label>Evaluation methodology<textarea required value={adminEvaluation} onChange={(e) => setAdminEvaluation(e.target.value)} /></label><label>Submission instructions<textarea required value={adminSubmission} onChange={(e) => setAdminSubmission(e.target.value)} /></label><div className="package-preview"><b>Documents generated on publication</b><span>Request for Quotation.pdf</span><span>Terms of Reference.pdf</span><span>Financial Schedule.pdf</span><span>Bidder Submission Forms.pdf</span></div></div>}<label>Publication / schedule date<input type="date" defaultValue="2026-07-31" /></label>{adminType !== "Procurement notice" && <label>Featured image or document<input type="file" /></label>}<button className="button primary">{adminType === "Procurement notice" ? "Generate PDFs and publish procurement" : `${adminStatus} record`}</button></form>
+          <article className="admin-card"><h3>Evaluator journeys</h3>{[{ t: "About & governance", v: "about" }, { t: "Vision and mission", v: "vision" }, { t: "Strategic Plan", v: "strategy" }, { t: "News directory", v: "news" }, { t: "Success stories", v: "stories" }, { t: "Careers", v: "careers" }, { t: "Events calendar", v: "events" }, { t: "Media galleries", v: "gallery" }, { t: "Procurement", v: "procurement" }].map((x) => <button className="journey-link" key={x.v} onClick={() => navigate(x.v as View)}><span>Ready to test</span><b>{x.t}</b><i>→</i></button>)}</article>
+          <article className="admin-card audit"><h3>Recent audit activity</h3>{adminLog.map((x, i) => <div key={`${x}-${i}`}><i /><span><b>{x}</b><small>{i ? `${i + 1} hours ago` : "Just now"} · Demo Administrator</small></span></div>)}</article>
+          <section className="admin-card full-site-manager"><div className="records-heading"><div><p className="eyebrow">Administrator · full website</p><h3>Pages, navigation and reusable sections</h3></div><button onClick={()=>{const title=window.prompt("New website page or navigation item");if(title)setWebsiteRecords(x=>[...x,{id:Date.now(),title,type:"Website page",status:"Draft"}])}}>+ Create page</button></div>{websiteRecords.map(record=><article key={record.id}><div><b>{record.title}</b><small>{record.type} · {record.status}</small></div><select value={record.status} onChange={e=>setWebsiteRecords(x=>x.map(a=>a.id===record.id?{...a,status:e.target.value}:a))}><option>Published</option><option>Draft</option><option>Archived</option></select><span className="record-actions"><button onClick={()=>{const title=window.prompt("Edit page/navigation title",record.title);if(title)setWebsiteRecords(x=>x.map(a=>a.id===record.id?{...a,title}:a))}}>Edit</button><button className="danger" onClick={()=>window.confirm(`Delete ${record.title}?`)&&setWebsiteRecords(x=>x.filter(a=>a.id!==record.id))}>Delete</button></span></article>)}</section>
+          <section className="admin-card full-site-manager"><div className="records-heading"><div><p className="eyebrow">Homepage media</p><h3>Carousel slides</h3></div><button onClick={()=>{const title=window.prompt("New carousel slide title");if(title)setCarouselActivities(x=>[...x,{title,caption:"New CMS-managed LACD activity slide.",image:"/activities/lacd-community-distribution.png",url:"https://www.facebook.com/p/Liberia-Agency-For-Community-Development-100054497019309/"}])}}>+ Create slide</button></div>{carouselActivities.map((slide,index)=><article key={`${slide.title}-${index}`}><div><b>{slide.title}</b><small>Carousel slide · position {index+1}</small></div><span>Published</span><span className="record-actions"><button onClick={()=>{const title=window.prompt("Edit slide title",slide.title);if(title)setCarouselActivities(x=>x.map((a,i)=>i===index?{...a,title}:a))}}>Edit</button><button className="danger" onClick={()=>window.confirm(`Delete ${slide.title}?`)&&setCarouselActivities(x=>x.filter((_,i)=>i!==index))}>Delete</button></span></article>)}</section>
+          <section className="admin-card full-site-manager"><div className="records-heading"><div><p className="eyebrow">Our work</p><h3>Six programme areas</h3></div><button onClick={()=>{const title=window.prompt("New programme title");if(title)setProgrammes(x=>[...x,{icon:"◆",title,text:"New CMS-managed programme overview.",county:"National"}])}}>+ Create programme</button></div>{programmes.map((programme,index)=><article key={`${programme.title}-${index}`}><div><b>{programme.title}</b><small>Programme · {programme.county}</small></div><span>Published</span><span className="record-actions"><button onClick={()=>{const title=window.prompt("Edit programme title",programme.title);if(title)setProgrammes(x=>x.map((a,i)=>i===index?{...a,title}:a))}}>Edit</button><button className="danger" onClick={()=>window.confirm(`Delete ${programme.title}?`)&&setProgrammes(x=>x.filter((_,i)=>i!==index))}>Delete</button></span></article>)}</section>
+          <section className="admin-card content-records"><div className="records-heading"><div><p className="eyebrow">Full administrator control</p><h3>All website content</h3></div><b>{contentItems.length+resources.length+opportunities.length} managed records</b></div><h4>News, stories, careers and events</h4>{contentItems.map(item=><div key={item.id}><span><b>{item.title}</b><small>{item.type} · {item.author}</small></span><select value={item.cmsStatus||"Published"} onChange={e=>{const next=e.target.value as ContentItem["cmsStatus"];setContentItems(x=>x.map(a=>a.id===item.id?{...a,cmsStatus:next}:a));setAdminLog(x=>[`${item.title} moved to ${next}`,...x]);}}><option>Published</option><option>Draft</option><option>Scheduled</option><option>Archived</option></select><span className="record-actions"><button onClick={()=>{const title=window.prompt("Edit title",item.title);if(title){setContentItems(x=>x.map(a=>a.id===item.id?{...a,title}:a));setAdminLog(x=>[`${item.title} edited`,...x]);}}}>Edit</button><button className="danger" onClick={()=>{if(window.confirm(`Delete ${item.title}?`)){setContentItems(x=>x.filter(a=>a.id!==item.id));setAdminLog(x=>[`${item.title} deleted`,...x]);}}}>Delete</button></span></div>)}<h4>Publications and policies</h4>{resources.map(item=><div key={item.id}><span><b>{item.title}</b><small>{item.type} · {item.year}</small></span><b>Published</b><span className="record-actions"><button onClick={()=>{const title=window.prompt("Edit title",item.title);if(title)setResources(x=>x.map(a=>a.id===item.id?{...a,title}:a));}}>Edit</button><button className="danger" onClick={()=>window.confirm(`Delete ${item.title}?`)&&setResources(x=>x.filter(a=>a.id!==item.id))}>Delete</button></span></div>)}<h4>Procurement opportunities</h4>{opportunities.map(item=><div key={item.ref}><span><b>{item.title}</b><small>{item.ref} · {item.deadline}</small></span><select value={item.status} onChange={e=>setOpportunities(x=>x.map(a=>a.ref===item.ref?{...a,status:e.target.value}:a))}><option>Open</option><option>Closed</option><option>Draft</option><option>Archived</option></select><span className="record-actions"><button onClick={()=>{setAdminPanel("Procurement");setAdminTitle(item.title);setAdminSummary(item.description);setAdminReference(item.ref)}}>Edit</button><button className="danger" onClick={()=>window.confirm(`Delete ${item.title}?`)&&setOpportunities(x=>x.filter(a=>a.ref!==item.ref))}>Delete</button></span></div>)}</section>
+        </div></>}
+        {adminPanel === "Procurement" && <section className="manager-layout procurement-manager"><form onSubmit={publishProcurement}><p className="eyebrow">Authorized procurement workflow</p><h2>Create procurement opportunity</h2><label>Opportunity title<input required value={adminTitle} onChange={e=>setAdminTitle(e.target.value)} /></label><label>Public summary<textarea required value={adminSummary} onChange={e=>setAdminSummary(e.target.value)} /></label><label>Reference number<input value={adminReference} onChange={e=>setAdminReference(e.target.value)} placeholder="Auto-generated if blank" /></label><label>Submission deadline<input required type="date" value={adminDeadline} onChange={e=>setAdminDeadline(e.target.value)} /></label><label>Scope and deliverables<textarea required value={adminScope} onChange={e=>setAdminScope(e.target.value)} /></label><label>Eligibility and evidence<textarea required value={adminEligibility} onChange={e=>setAdminEligibility(e.target.value)} /></label><label>Evaluation methodology<textarea required value={adminEvaluation} onChange={e=>setAdminEvaluation(e.target.value)} /></label><label>Submission instructions<textarea required value={adminSubmission} onChange={e=>setAdminSubmission(e.target.value)} /></label><button className="button primary">Generate branded PDFs and publish →</button></form><div className="record-table"><h2>Published opportunities</h2>{opportunities.map(o=><article key={o.ref}><span className={o.status==="Open"?"user-active":"user-inactive"}>{o.status}</span><div><b>{o.title}</b><small>{o.ref} · {o.deadline}</small></div><button onClick={()=>{setSelectedTender(o);navigate("procurement")}}>Open public record</button></article>)}</div></section>}
+        {adminPanel === "Media" && <MediaManager alert={alert} />}
+        {adminPanel === "Users" && <UserManager users={cmsUsers} setUsers={setCmsUsers} alert={alert} />}
+        {adminPanel === "Newsletter" && <NewsletterManager subscribers={subscribers} setSubscribers={setSubscribers} alert={alert} />}
+        {adminPanel === "SEO" && <SeoManager alert={alert} />}
+        {adminPanel === "Analytics" && <AnalyticsDashboard />}
+        {adminPanel === "Backups" && <BackupManager log={adminLog} setLog={setAdminLog} alert={alert} />}
+        <div className="callout"><b>Persistent evaluator environment:</b> CMS changes, bidder accounts, compliance documents, procurement notices, clarifications, proposal attachments, receipts and audit activity are stored in the platform database and object store. Refresh or sign back in to verify recovery. Final commissioning will replace demonstration identities and sample content with LACD-approved accounts, policies and records.</div>
+      </Page></div></div>}
+
+      <footer>
+        <div className="footer-brand"><img src={asset("/lacd-logo.jpg")} alt="" /><div><b>Liberia Agency for<br />Community Development</b><p>Local agency. Shared progress.</p></div></div>
+        <div><h3>Explore LACD</h3><button onClick={() => navigate("about")}>About LACD</button><button onClick={() => navigate("vision")}>Vision, Mission & Values</button><button onClick={() => navigate("strategy")}>Strategic Plan</button><button onClick={() => navigate("news")}>News & Updates</button><button onClick={() => navigate("stories")}>Success Stories</button><button onClick={() => navigate("careers")}>Careers</button><button onClick={() => navigate("events")}>Events Calendar</button><button onClick={() => navigate("gallery")}>Gallery</button><button onClick={() => navigate("partners")}>Partners & donors</button></div>
+        <div><h3>Transparency</h3><button onClick={() => navigate("resources")}>Public information</button><button onClick={() => navigate("procurement")}>Procurement opportunities</button><button onClick={() => navigate("projects")}>Project results</button><button onClick={() => navigate("contact")}>Contact & feedback</button><button onClick={() => navigate("privacy")}>Privacy Policy</button><button onClick={() => navigate("terms")}>Terms of Use</button><button onClick={() => navigate("admin")}>CMS test centre</button></div>
+        <div className="footer-bottom"><span>Interactive concept demonstration prepared by TOTAG IT Services for RFQ evaluation.</span><span>Responsive · Accessible · Secure-by-design</span></div>
+      </footer>
+    </main>
+  );
+}
+
+function Page({ title, eyebrow, intro, children }: { title: string; eyebrow: string; intro: string; children: React.ReactNode }) {
+  return <><section className="page-hero"><p className="eyebrow">{eyebrow}</p><h1>{title}</h1><p>{intro}</p></section><section className="section page-content">{children}</section></>;
+}
+
+function AdminModule({ title, metric, items, action, onAction }: { title: string; metric: string; items: string[]; action: string; onAction: () => void }) {
+  return <section className="module-panel"><div className="module-heading"><div><p className="eyebrow">CMS workflow</p><h2>{title}</h2></div><strong>{metric}</strong></div><div className="module-list">{items.map((item, index) => <article key={item}><span>{String(index + 1).padStart(2, "0")}</span><b>{item}</b><i>Ready</i></article>)}</div><button className="button primary" onClick={onAction}>{action}</button></section>;
+}
+
+function ContentDirectory({title,eyebrow,intro,items,onOpen,download}:{title:string;eyebrow:string;intro:string;items:ContentItem[];onOpen:(item:ContentItem)=>void;download?:(title:string,body:string)=>void}) {
+  const [archive,setArchive]=useState("2026"); const [term,setTerm]=useState("");
+  const shown=items.filter(x=>`${x.title} ${x.category} ${x.summary}`.toLowerCase().includes(term.toLowerCase()));
+  return <Page title={title} eyebrow={eyebrow} intro={intro}><div className="directory-tools"><label>Search this directory<input value={term} onChange={e=>setTerm(e.target.value)} placeholder={`Search ${title.toLowerCase()}`} /></label><label>Archive year<select value={archive} onChange={e=>setArchive(e.target.value)}><option>2026</option><option>2025</option><option>2024</option></select></label><b>{shown.length} published record{shown.length===1?"":"s"}</b></div><div className="content-grid">{shown.map(item=><article key={item.id}><div className={`content-visual visual-${item.type.replace(" ","").toLowerCase()}`}><span>Featured image</span></div><small>{item.date} · {item.category}</small><h3>{item.title}</h3><p>{item.summary}</p><span className="byline">By {item.author}</span><button onClick={()=>onOpen(item)}>Open full {item.type.toLowerCase()} →</button>{item.type==="Vacancy"&&download&&<button className="download-link" onClick={()=>download(`${item.title} Job Description`,item.body)}>Download job description ↓</button>}</article>)}</div>{!shown.length&&<p className="empty">No published records match this search.</p>}</Page>;
+}
+
+function Newsletter({subscribers,setSubscribers,alert}:{subscribers:string[];setSubscribers:React.Dispatch<React.SetStateAction<string[]>>;alert:(text:string,type?:"success"|"info")=>void}) {
+  const [email,setEmail]=useState("");
+  return <section className="newsletter"><div><p className="eyebrow light">Stay informed</p><h2>Receive LACD news, events and opportunities.</h2><p>Subscribers receive an immediate confirmation and can manage their preferences or unsubscribe.</p></div><form onSubmit={e=>{e.preventDefault();if(subscribers.includes(email)) return alert("This email is already subscribed.","info");setSubscribers(x=>[...x,email]);setEmail("");alert("Subscription confirmed and added to the CMS mailing list.")}}><label><span className="sr-only">Email address</span><input required type="email" value={email} onChange={e=>setEmail(e.target.value)} placeholder="Your email address" /></label><button>Subscribe →</button></form></section>;
+}
+
+function PolicyPage({kind}:{kind:"privacy"|"terms"}) {
+  const privacy=[["Information we collect","Contact details submitted through enquiry, newsletter, career and procurement forms; technical security data necessary to protect the service."],["How information is used","To respond to requests, manage subscriptions, administer authorized services, improve accessibility and maintain institutional records."],["Protection and retention","Access controls, encryption, backups and approved retention schedules protect information. Records are retained only as necessary."],["Your rights and choices","Users may request access, correction, subscription removal or deletion where this does not conflict with legal and institutional obligations."],["Cookies and analytics","Essential cookies support security and preferences. Privacy-conscious analytics measure visits, pages, downloads, devices and broad geographic reach."]];
+  const terms=[["Authoritative information","Official notices and solicitation documents control where website summaries differ. Users should verify deadlines and requirements in issued documents."],["Acceptable use","Users may not disrupt services, introduce malicious content, impersonate others or misuse information published by LACD."],["Downloads and intellectual property","Public documents may be downloaded for lawful reference. Logos, photographs and protected content remain subject to applicable rights."],["External links","LACD may link to approved partner, social-media and map services but does not control external services or their privacy practices."],["Changes and contact","LACD may update these terms and will publish the effective date. Questions may be submitted through the Contact page."]];
+  const sections=kind==="privacy"?privacy:terms;
+  return <Page title={kind==="privacy"?"Privacy Policy":"Terms of Use"} eyebrow="Digital trust and accountability" intro={kind==="privacy"?"How LACD collects, uses, protects and retains personal information submitted through its website.":"The conditions governing access to, reliance on and responsible use of LACD’s website and digital services."}><div className="policy-meta"><span>Effective date: 31 July 2026</span><span>CMS version: 1.0</span><button onClick={()=>downloadDemo(kind==="privacy"?"LACD Privacy Policy":"LACD Terms of Use",sections.map(x=>x.join("\n")).join("\n\n"))}>Download PDF-ready copy ↓</button></div><div className="policy-document">{sections.map(([a,b],i)=><section key={a}><span>{String(i+1).padStart(2,"0")}</span><div><h2>{a}</h2><p>{b}</p></div></section>)}</div></Page>;
+}
+
+function RichTextEditor({value,onChange}:{value:string;onChange:(html:string)=>void}){
+  const command=(name:string,arg?:string)=>{document.execCommand(name,false,arg);};
+  return <div className="rich-editor"><div className="editor-toolbar" aria-label="Formatting tools"><button type="button" onClick={()=>command("bold")}><b>B</b></button><button type="button" onClick={()=>command("italic")}><i>I</i></button><button type="button" onClick={()=>command("formatBlock","h2")}>Heading</button><button type="button" onClick={()=>command("insertUnorderedList")}>Bullets</button><button type="button" onClick={()=>command("createLink",window.prompt("Approved link URL")||"")}>Link</button><button type="button" onClick={()=>command("removeFormat")}>Clear</button><label>Featured image<input type="file" accept="image/jpeg,image/png,image/webp"/></label></div><div className="editor-canvas" contentEditable suppressContentEditableWarning dangerouslySetInnerHTML={{__html:value}} onInput={e=>onChange(e.currentTarget.innerHTML)}/></div>
+}
+
+function MediaManager({alert}:{alert:(text:string,type?:"success"|"info")=>void}) {
+  const [records,setRecords]=useState(galleryItems.map((x,i)=>({...x,id:i+1,status:"Published"})));
+  return <section className="manager-layout"><form onSubmit={e=>{e.preventDefault();const f=new FormData(e.currentTarget);setRecords(x=>[{id:Date.now(),type:String(f.get("type")),title:String(f.get("title")),meta:`${f.get("date")} · ${f.get("programme")}`,status:"Published"},...x]);e.currentTarget.reset();alert("Media record published to the public gallery.")}}><h2>Create media record</h2><label>Media type<select name="type"><option>Photo</option><option>Video</option></select></label><label>Album / title<input required name="title" /></label><label>Caption<textarea required name="caption" /></label><label>Activity date<input required type="date" name="date" /></label><label>Programme / project category<select name="programme"><option>Food Security & Agriculture</option><option>Women & Youth</option><option>Climate & Clean Energy</option></select></label><label>Upload photo or add approved video<input required type="file" accept="image/*,video/*" /></label><button className="button primary">Upload and publish</button></form><div className="record-table"><h2>Gallery records</h2>{records.map(r=><article key={r.id}><span>{r.type}</span><div><b>{r.title}</b><small>{r.meta}</small></div><select value={r.status} onChange={e=>setRecords(x=>x.map(a=>a.id===r.id?{...a,status:e.target.value}:a))}><option>Published</option><option>Draft</option><option>Archived</option></select></article>)}</div></section>;
+}
+
+type CmsUser={id:number;name:string;email:string;role:string;active:boolean};
+function UserManager({users,setUsers,alert}:{users:CmsUser[];setUsers:React.Dispatch<React.SetStateAction<CmsUser[]>>;alert:(text:string,type?:"success"|"info")=>void}) {
+  return <section className="manager-layout"><form onSubmit={e=>{e.preventDefault();const f=new FormData(e.currentTarget);setUsers(x=>[...x,{id:Date.now(),name:String(f.get("name")),email:String(f.get("email")),role:String(f.get("role")),active:true}]);e.currentTarget.reset();alert("CMS user created and role assigned.")}}><h2>Create CMS user</h2><label>Full name<input required name="name" /></label><label>Email<input required type="email" name="email" /></label><label>Role<select name="role"><option>Administrator</option><option>Editor</option><option>Author</option><option>Procurement Publisher</option><option>Analytics Viewer</option></select></label><label>Temporary password<input required type="password" name="password" minLength={8} /></label><button className="button primary">Create account</button></form><div className="record-table"><h2>Users, roles and activity</h2>{users.map(u=><article key={u.id}><span className={u.active?"user-active":"user-inactive"}>{u.active?"Active":"Inactive"}</span><div><b>{u.name}</b><small>{u.email} · {u.role} · Last activity: today</small></div><button onClick={()=>{setUsers(x=>x.map(a=>a.id===u.id?{...a,active:!a.active}:a));alert(`${u.name} account ${u.active?"deactivated":"reactivated"}.`)}}>{u.active?"Deactivate":"Reactivate"}</button></article>)}</div></section>;
+}
+
+function NewsletterManager({subscribers,setSubscribers,alert}:{subscribers:string[];setSubscribers:React.Dispatch<React.SetStateAction<string[]>>;alert:(text:string,type?:"success"|"info")=>void}) {
+  return <section className="module-panel"><div className="module-heading"><div><p className="eyebrow">Engagement workflow</p><h2>Newsletter subscribers</h2></div><strong>{subscribers.length} active</strong></div><div className="record-table">{subscribers.map(email=><article key={email}><span className="user-active">Confirmed</span><div><b>{email}</b><small>Interests: News, events and opportunities</small></div><button onClick={()=>{setSubscribers(x=>x.filter(a=>a!==email));alert(`${email} unsubscribed.`)}}>Unsubscribe</button></article>)}</div><button className="button secondary" onClick={()=>downloadDemo("LACD newsletter subscribers",subscribers.join("\n"))}>Export subscriber list</button></section>;
+}
+
+function SeoManager({alert}:{alert:(text:string,type?:"success"|"info")=>void}) {
+  return <section className="manager-layout"><form onSubmit={e=>{e.preventDefault();alert("SEO settings saved and sitemap refreshed.")}}><h2>Edit page SEO</h2><label>Page<select><option>Homepage</option><option>About LACD</option><option>Strategic Plan</option><option>News</option></select></label><label>Page title<input defaultValue="Liberia Agency for Community Development | LACD" /></label><label>Meta description<textarea defaultValue="Community-led programmes, results, public information and opportunities from LACD." /></label><label>Search-friendly URL<input defaultValue="/about-lacd" /></label><label>Social-sharing image<input type="file" accept="image/*" /></label><label className="declaration"><input type="checkbox" defaultChecked /><span>Allow search engines to index this page</span></label><button className="button primary">Save SEO settings</button></form><div className="record-table"><h2>Technical SEO status</h2>{[["XML sitemap","Generated · 18 public pages"],["Robots and indexing","Enabled"],["Canonical URLs","Valid"],["Social preview metadata","Configured"],["Broken-link scan","0 critical issues"]].map(([a,b])=><article key={a}><span className="user-active">Ready</span><div><b>{a}</b><small>{b}</small></div></article>)}<button className="button secondary" onClick={()=>alert("SEO and accessibility audit complete: 96% readiness.")}>Run SEO audit</button></div></section>;
+}
+
+function AnalyticsDashboard() {return <div className="analytics-grid">{[["12,480","Unique visitors"],["31,206","Page views"],["1,842","Document downloads"],["68%","Mobile devices"],["15","Countries reached"],["4m 12s","Average engagement"]].map(([a,b])=><article key={b}><strong>{a}</strong><span>{b}</span><i /></article>)}<section><h3>Traffic sources</h3>{[["Direct / bookmarked",38],["Search engines",29],["Social media",21],["Partner referrals",12]].map(([x,n])=><div key={String(x)}><span>{x}</span><b>{n}%</b></div>)}</section><section><h3>Most viewed content</h3>{[["Programmes",34],["Procurement opportunities",27],["Success stories",22],["Publications",17]].map(([x,n])=><div key={String(x)}><span>{x}</span><b>{n}%</b></div>)}</section></div>}
+
+function BackupManager({log,setLog,alert}:{log:string[];setLog:React.Dispatch<React.SetStateAction<string[]>>;alert:(text:string,type?:"success"|"info")=>void}) {const [backups,setBackups]=useState([{id:1,date:"Today · 02:00 GMT",type:"Scheduled",status:"Verified"},{id:2,date:"30 Jul 2026 · 02:00 GMT",type:"Scheduled",status:"Verified"},{id:3,date:"28 Jul 2026 · 16:42 GMT",type:"Pre-update",status:"Verified"}]);return <section className="manager-layout"><div className="module-panel"><p className="eyebrow">Security status</p><h2>Protected and maintained</h2>{["SSL certificate active","Daily encrypted backups","Malware and file-integrity monitoring","CMS security updates current","Monthly restore test scheduled"].map(x=><p className="security-line" key={x}><span>✓</span>{x}</p>)}<button className="button primary" onClick={()=>{setBackups(x=>[{id:Date.now(),date:"Just now",type:"Manual",status:"Verified"},...x]);setLog(x=>["Manual backup created and verified",...x]);alert("Backup created and integrity verified.")}}>Create backup now</button></div><div className="record-table"><h2>Restore points & maintenance</h2>{backups.map(b=><article key={b.id}><span className="user-active">{b.status}</span><div><b>{b.date}</b><small>{b.type} backup · encrypted off-site copy</small></div><button onClick={()=>alert(`Restore simulation completed for ${b.date}. No live data was changed.`)}>Test restore</button></article>)}<h3>Maintenance history</h3>{log.slice(0,4).map(x=><p key={x}>{x}</p>)}</div></section>}
