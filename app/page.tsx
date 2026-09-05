@@ -5,8 +5,25 @@ import { jsPDF } from "jspdf";
 
 type View = "home" | "about" | "vision" | "strategy" | "programmes" | "programme-detail" | "projects" | "news" | "stories" | "careers" | "events" | "content-detail" | "gallery" | "partners" | "resources" | "procurement" | "contact" | "donate" | "privacy" | "terms" | "search" | "admin";
 type Notice = { type: "success" | "info"; text: string } | null;
-type Resource = { id: number; type: string; year: string; title: string; summary: string };
 type StoredFile = { key: string; name: string; type: string; size: number; scanStatus: string };
+type ResourceSection = {
+  heading: string;
+  content: string[];
+};
+
+type Resource = { 
+  id: number; 
+  type: string; 
+  year: string; 
+  title: string; 
+  summary: string;
+  pages?: number;
+  author?: string;
+  category?: string;
+  highlights?: string[];
+  sections?: ResourceSection[];
+  content?: string[];
+};
 type Attachment = { key: string; label: string; required: boolean; file?: File | StoredFile };
 const isStoredFile = (file: File | StoredFile | undefined): file is StoredFile => Boolean(file && "key" in file);
 type SolicitationContent = { scope: string; eligibility: string; evaluation: string; submission: string };
@@ -66,10 +83,190 @@ const projects = [
 ];
 
 const starterResources: Resource[] = [
-  { id: 1, type: "Report", year: "2026", title: "LACD Annual Results Report 2025", summary: "Institutional results, programme learning and financial accountability." },
-  { id: 2, type: "Strategy", year: "2026", title: "Institutional Strategic Framework", summary: "Strategic priorities and implementation framework." },
-  { id: 3, type: "Brief", year: "2025", title: "Community Climate Resilience Learning Brief", summary: "Evidence and lessons from community adaptation work." },
-  { id: 4, type: "Policy", year: "2025", title: "Safeguarding and Community Accountability Policy", summary: "Standards for safe, inclusive and accountable programming." },
+  {
+    id: 1,
+    type: "Report",
+    year: "2026",
+    title: "LACD Annual Results Report 2025",
+    summary: "Comprehensive account of institutional delivery, county-level outcomes, partnership impact and audited financial accountability for the 2025 reporting period.",
+    pages: 36,
+    author: "LACD Executive Secretariat & M&E Directorate",
+    category: "Annual Results & Accountability",
+    highlights: [
+      "14,850 direct participants reached across 6 integrated programme sectors",
+      "15 Liberian counties engaged through direct operations and community networks",
+      "92% community satisfaction and local ownership index across surveyed projects",
+      "$1.42M programmatic delivery with an unqualified (clean) external audit opinion"
+    ],
+    sections: [
+      {
+        heading: "1. Executive Message from Leadership",
+        content: [
+          "In 2025, the Liberia Agency for Community Development (LACD) continued to uphold its founding charter commitment established in 2013: advancing participatory, community-owned solutions that build lasting resilience across Liberia. Facing macroeconomic shifts and climatic volatility, our teams prioritized decentralized delivery, direct engagement with grassroots leadership, and unwavering financial stewardship.",
+          "Throughout the reporting year, LACD sustained operations across six integrated programme pillars, expanding our direct footprint from smallholder producer cooperatives in Bomi and Gbarpolu to youth technical cohorts in Montserrado and Margibi. This report outlines what we achieved together with our community partners, the challenges encountered, and our verified audited financials."
+        ]
+      },
+      {
+        heading: "2. Key Programme Achievements & Beneficiary Reach",
+        content: [
+          "Food Security & Resilient Agriculture: Over 1,850 smallholders and women-led farmer organizations received hands-on climate-smart training, certified seed varieties, and solar drying technology, achieving an average 22% reduction in seasonal post-harvest loss.",
+          "Climate & Clean Energy: Delivered 8 community solar pilots and trained 45 local youth technicians in solar installation, electrical safety, and ongoing maintenance, expanding clean-energy access for community water points and post-harvest centers.",
+          "Women & Youth Enterprise: Accelerated 180 community-based micro-enterprises through financial literacy cohorts, peer savings schemes, and market linkage clinics, increasing household savings among 74% of participants.",
+          "Health, Nutrition & Foundational Education: Facilitated 48 community health dialogues, supported 16 localized learning sites, and reached over 3,500 children, adolescents, and caregivers with preventive care and educational materials."
+        ]
+      },
+      {
+        heading: "3. Financial Stewardship & Donor Resource Allocation",
+        content: [
+          "Total institutional expenditure for FY2025 stood at $1,420,800 USD. Resource allocation remained strictly mission-driven: 78.4% direct community programme delivery, 12.2% monitoring, evaluation, accountability and learning (MEAL), and 9.4% administrative operations and institutional governance.",
+          "An independent external audit conducted in compliance with International Standards on Auditing (ISA) yielded an unqualified (clean) audit opinion, verifying complete compliance with statutory obligations, donor guidelines, and transparent procurement policies."
+        ]
+      },
+      {
+        heading: "4. Lessons Learned & 2026 Strategic Horizon",
+        content: [
+          "Key lessons identified during 2025 include the vital necessity of community co-investment in productive asset protection, the operational effectiveness of women-managed storage collectives, and the critical value of real-time digital field feedback mechanisms.",
+          "Looking into 2026, LACD is scaling solar drying initiatives to additional agricultural corridors, commissioning our open Electronic Procurement Portal, and deepening partnerships with county administrations, bilateral donors, and civil society."
+        ]
+      }
+    ]
+  },
+  {
+    id: 2,
+    type: "Strategy",
+    year: "2026",
+    title: "Institutional Strategic Framework (2024–2028)",
+    summary: "Five-year roadmap establishing strategic priorities, theory of change, localization commitments and results framework for sustainable community transformation.",
+    pages: 44,
+    author: "Directorate of Strategic Planning & Partnerships",
+    category: "Institutional Strategy",
+    highlights: [
+      "5-Year strategic horizon directly aligned with the UN Sustainable Development Goals (SDGs)",
+      "6 Interconnected pillars: Agriculture, Clean Energy, Women/Youth, Health, Education & Governance",
+      "Localization-first operational model prioritizing community-based structures and accountability",
+      "Integrated Results-Based Management (RBM) system with transparent indicator tracking"
+    ],
+    sections: [
+      {
+        heading: "1. Institutional Mandate and Strategic Context",
+        content: [
+          "Founded in 2013 as a dedicated national community development organization, the Liberia Agency for Community Development (LACD) exists to bridge the gap between national development aspirations and grassroots realities. Operating across urban, peri-urban, and remote rural settings, LACD centers local capability, indigenous knowledge, and institutional integrity.",
+          "This Strategic Framework sets our trajectory from 2024 through 2028. It outlines how LACD will scale tested methodologies, leverage innovative low-carbon technologies, and foster accountable grassroots partnerships that outlast external funding cycles."
+        ]
+      },
+      {
+        heading: "2. Theory of Change & Six Strategic Pillars",
+        content: [
+          "Theory of Change: IF communities possess inclusive decision-making forums, practical technical capabilities, climate-resilient productive assets, and transparent governance systems; THEN they will achieve lasting economic security, social equity, and self-reliance; BECAUSE local ownership is the fundamental prerequisite for sustainable development.",
+          "Strategic Pillars: 1) Climate-Resilient Agriculture & Food Sovereignty; 2) Renewable Energy & Environmental Stewardship; 3) Inclusive Economic Empowerment for Women & Youth; 4) Community Health, Nutrition & Wellbeing; 5) Accessible & Quality Foundational Education; 6) Social Accountability, Civic Inclusion & Safeguarding."
+        ]
+      },
+      {
+        heading: "3. Localization Architecture & Partnerships",
+        content: [
+          "LACD is committed to the Global Localization Agenda: directing at least 70% of programmatic sub-awards and field resources directly to community-based organizations (CBOs), local farmer cooperatives, and village committees.",
+          "We cultivate transparent, accountable, multi-year partnerships with international development partners, Liberian government line ministries, county councils, and philanthropic foundations committed to sustainable community development."
+        ]
+      },
+      {
+        heading: "4. Governance, Fiduciary Standards & MEAL Framework",
+        content: [
+          "The framework incorporates strict fiduciary controls, independent Board oversight, an unyielding safeguarding protocol, and a publicly accessible Information Centre ensuring open public scrutiny of our publications, expenditures, and procurement opportunities."
+        ]
+      }
+    ]
+  },
+  {
+    id: 3,
+    type: "Brief",
+    year: "2025",
+    title: "Community Climate Resilience Learning Brief",
+    summary: "Field evidence, operational insights and policy recommendations on community-led climate adaptation, solar drying technologies and resilient rural livelihoods.",
+    pages: 18,
+    author: "Climate Adaptation & Resilient Livelihoods Unit",
+    category: "Research & Policy Brief",
+    highlights: [
+      "22% documented reduction in agricultural post-harvest crop losses across 3 pilot counties",
+      "12 communal hybrid solar dryers constructed and operationalized with 100% local timber & materials",
+      "85% of participating smallholders report increased off-season food availability and household income",
+      "Model validated by county agricultural authorities for replication across rural Liberia"
+    ],
+    sections: [
+      {
+        heading: "1. The Vulnerability Landscape in Rural Liberia",
+        content: [
+          "Changing rainfall patterns, prolonged dry spells, and intensified flash floods present unprecedented challenges for smallholder farming communities across Liberia. High relative humidity and inadequate post-harvest drying facilities historically lead to severe spoilage of staples like cassava, pepper, and grain, often consuming 20% to 30% of total harvest value.",
+          "Smallholder farmers, particularly women who carry out the majority of processing and marketing, are acutely exposed to climate shocks without accessible, affordable post-harvest preservation technology."
+        ]
+      },
+      {
+        heading: "2. The Innovation: Communal Hybrid Solar Dryers",
+        content: [
+          "In response, LACD engineered a low-cost, durable hybrid solar dryer utilizing locally sourced timber, UV-resistant transparent polycarbonate glazing, and passive solar thermal convective airflow. These dryers require zero fossil-fuel electricity and operate reliably under tropical humidity.",
+          "Each unit can process up to 300 kilograms of sliced cassava, peppers, or cocoa beans in a single cycle, accelerating dehydration while protecting produce from rain, pests, and airborne dust."
+        ]
+      },
+      {
+        heading: "3. Field Findings, Economic Gains & Gender Dividends",
+        content: [
+          "Field trials conducted in Bomi, Gbarpolu, and Grand Cape Mount demonstrated that crop drying duration dropped from 7-10 days under open sun to under 48 hours within the solar dryers, eliminating mold proliferation and preserving nutrient density.",
+          "Crucially, because women perform over 70% of manual post-harvest processing, the solar dryer installations reduced processing labor by approximately 15 hours per week per household, allowing women entrepreneurs to invest time in cooperative marketing, business diversification, and children's education."
+        ]
+      },
+      {
+        heading: "4. Policy & Scalability Recommendations",
+        content: [
+          "1) Integrate solar drying infrastructure into county development funding priorities; 2) Support technical vocational institutes (TVET) to train youth in solar dryer fabrication and maintenance; 3) Expand micro-lease financing for farmer cooperatives to acquire shared processing assets."
+        ]
+      }
+    ]
+  },
+  {
+    id: 4,
+    type: "Policy",
+    year: "2025",
+    title: "Safeguarding and Community Accountability Policy",
+    summary: "Official institutional guidelines, mandatory behavioral standards, confidential reporting channels and grievance redress protocols ensuring protection and dignity.",
+    pages: 26,
+    author: "Safeguarding, Ethics & Legal Compliance Committee",
+    category: "Institutional Policy & Compliance",
+    highlights: [
+      "Strict zero tolerance for sexual exploitation, abuse, child labor, and workplace harassment",
+      "Independent, confidential multi-channel grievance and reporting mechanisms (phone, email, lockboxes)",
+      "Mandatory annual safeguarding certification required for 100% of staff, contractors, and partners",
+      "Formal survivor-centred response protocol with free psychological, health, and legal referral support"
+    ],
+    sections: [
+      {
+        heading: "1. Policy Purpose and Institutional Scope",
+        content: [
+          "The Liberia Agency for Community Development (LACD) holds an unyielding obligation to ensure that all individuals—particularly children, women, persons with disabilities, and vulnerable community members—are safe from harm, exploitation, abuse, or discrimination resulting from contact with our staff, operations, or partners.",
+          "This policy applies without exception to Board members, full-time and temporary staff, consultants, volunteers, contractors, and implementing partners across all 15 counties of Liberia."
+        ]
+      },
+      {
+        heading: "2. Mandatory Code of Conduct & Core Prohibitions",
+        content: [
+          "Zero Tolerance: Sexual exploitation and abuse (SEA), exchange of humanitarian assistance or services for money, employment, or personal favors, corporal punishment, and physical or emotional maltreatment are strictly prohibited.",
+          "Duty to Report: Any employee, partner, contractor, or community member who witnesses or suspects a violation is obligated under this policy to report the matter immediately without fear of retaliation."
+        ]
+      },
+      {
+        heading: "3. Confidential Reporting & Grievance Redress Channels",
+        content: [
+          "Reports may be submitted via: 1) Confidential Hotline: +231 777 011 212; 2) Dedicated confidential email: emmanuelpaye1978@gmail.com and lacommunitydevelopment1@gmail.com; 3) Secure physical suggestion lockboxes placed at all community field offices; 4) In-person consultation with designated County Safeguarding Focal Points.",
+          "All reports are treated with absolute confidentiality. Retaliation of any kind against a complainant or witness is a gross disciplinary offence resulting in immediate termination and legal action."
+        ]
+      },
+      {
+        heading: "4. Investigation, Disciplinary Protocol & Survivor Support",
+        content: [
+          "All allegations are acknowledged within 48 hours and investigated by an independent, gender-balanced Safeguarding Review Panel within 14 working days.",
+          "LACD adheres to a strict survivor-centred approach, prioritizing survivor safety, privacy, medical support, psychosocial counseling, and legal assistance. Confirmed violations result in immediate contract termination, blacklisting, and referral to the Liberia National Police and relevant judicial authorities."
+        ]
+      }
+    ]
+  }
 ];
 
 const starterOpportunities: Opportunity[] = [
@@ -114,14 +311,156 @@ function downloadDemo(title: string, body: string) {
   URL.revokeObjectURL(url);
 }
 
-async function downloadBrandedPdf(title:string, body:string, category="Institutional document") {
-  const doc=new jsPDF({unit:"mm",format:"a4",compress:true});
-  let logo="";try{logo=await imageData("/lacd-logo.jpg")}catch{}
-  doc.setFillColor(15,56,37);doc.rect(0,0,210,38,"F");doc.setFillColor(226,167,53);doc.rect(0,38,210,2,"F");
-  if(logo)doc.addImage(logo,"JPEG",16,7,24,24);doc.setTextColor(255,255,255);doc.setFont("helvetica","bold");doc.setFontSize(13);doc.text("LIBERIA AGENCY FOR COMMUNITY DEVELOPMENT",45,16);doc.setFontSize(8);doc.setFont("helvetica","normal");doc.text("Community-led · Evidence-driven · Accountable",45,23);
-  doc.setTextColor(47,125,69);doc.setFont("helvetica","bold");doc.setFontSize(9);doc.text(category.toUpperCase(),18,55);doc.setTextColor(24,43,33);doc.setFontSize(23);const heading=doc.splitTextToSize(title,174);doc.text(heading,18,68,{lineHeightFactor:1.15});let y=72+heading.length*10;
-  doc.setDrawColor(220,229,216);doc.line(18,y,192,y);y+=12;doc.setFont("helvetica","normal");doc.setFontSize(10);doc.setTextColor(61,72,65);const lines=doc.splitTextToSize(body.replace(/<[^>]*>/g," "),170);doc.text(lines,20,y,{lineHeightFactor:1.55});
-  doc.setFontSize(8);doc.setTextColor(105,115,108);doc.text("Liberia Agency for Community Development · Chugbor Road, Old Road, Monrovia, Liberia",18,285);doc.text("Official CMS-generated document",192,285,{align:"right"});doc.save(`${title.replace(/[^a-z0-9]+/gi,"-").toLowerCase()}.pdf`);
+async function downloadBrandedPdf(title: string, bodyOrResource: string | Resource, category = "Institutional document") {
+  const doc = new jsPDF({ unit: "mm", format: "a4", compress: true });
+  let logo = "";
+  try { logo = await imageData("/lacd-logo.jpg"); } catch {}
+
+  const forest: [number, number, number] = [15, 56, 37];
+  const gold: [number, number, number] = [226, 167, 53];
+  const leaf: [number, number, number] = [47, 125, 69];
+
+  const drawHeader = (pageNumber: number) => {
+    doc.setFillColor(...forest);
+    doc.rect(0, 0, 210, 32, "F");
+    doc.setFillColor(...gold);
+    doc.rect(0, 32, 210, 2, "F");
+    if (logo) {
+      try { doc.addImage(logo, "JPEG", 14, 5, 22, 22); } catch {}
+    }
+    doc.setTextColor(255, 255, 255);
+    doc.setFont("helvetica", "bold");
+    doc.setFontSize(11);
+    doc.text("LIBERIA AGENCY FOR COMMUNITY DEVELOPMENT", 40, 14);
+    doc.setFontSize(8);
+    doc.setFont("helvetica", "normal");
+    doc.text("Community-led · Evidence-driven · Accountable · Est. 2013", 40, 20);
+    if (pageNumber > 1) {
+      doc.setFontSize(7.5);
+      doc.setTextColor(215, 235, 222);
+      const subHeading = title.length > 60 ? `${title.slice(0, 60)}...` : title;
+      doc.text(subHeading, 40, 26);
+    }
+  };
+
+  const drawFooter = (pageNumber: number, totalPages: number) => {
+    doc.setDrawColor(...gold);
+    doc.setLineWidth(0.5);
+    doc.line(14, 282, 196, 282);
+    doc.setFont("helvetica", "normal");
+    doc.setFontSize(7.5);
+    doc.setTextColor(100, 110, 105);
+    doc.text("Liberia Agency for Community Development · Chugbor Road, Old Road, Monrovia, Liberia", 14, 287);
+    doc.text(`Page ${pageNumber} of ${totalPages} · Official Public Record`, 196, 287, { align: "right" });
+  };
+
+  let docCategory = category;
+  const itemsToPrint: { type: "heading" | "body" | "highlight"; text: string }[] = [];
+
+  if (typeof bodyOrResource === "object" && bodyOrResource !== null) {
+    const res = bodyOrResource as Resource;
+    docCategory = res.category || res.type || category;
+    if (res.summary) {
+      itemsToPrint.push({ type: "heading", text: "Executive Summary" });
+      itemsToPrint.push({ type: "body", text: res.summary });
+    }
+    if (res.highlights && res.highlights.length > 0) {
+      itemsToPrint.push({ type: "heading", text: "Key Document Highlights" });
+      res.highlights.forEach(h => itemsToPrint.push({ type: "highlight", text: `• ${h}` }));
+    }
+    if (res.sections && res.sections.length > 0) {
+      res.sections.forEach(sec => {
+        itemsToPrint.push({ type: "heading", text: sec.heading });
+        sec.content.forEach(p => itemsToPrint.push({ type: "body", text: p }));
+      });
+    } else if (res.content && res.content.length > 0) {
+      res.content.forEach(p => itemsToPrint.push({ type: "body", text: p }));
+    }
+  } else {
+    String(bodyOrResource).split("\n\n").forEach(p => {
+      const clean = p.replace(/<[^>]*>/g, " ").trim();
+      if (!clean) return;
+      if (clean.startsWith("#")) {
+        itemsToPrint.push({ type: "heading", text: clean.replace(/^#+\s*/, "") });
+      } else {
+        itemsToPrint.push({ type: "body", text: clean });
+      }
+    });
+  }
+
+  drawHeader(1);
+  let y = 46;
+  doc.setTextColor(...leaf);
+  doc.setFont("helvetica", "bold");
+  doc.setFontSize(9);
+  doc.text(docCategory.toUpperCase(), 16, y);
+  y += 7;
+
+  doc.setTextColor(24, 43, 33);
+  doc.setFont("helvetica", "bold");
+  doc.setFontSize(17);
+  const titleLines = doc.splitTextToSize(title, 178);
+  doc.text(titleLines, 16, y);
+  y += titleLines.length * 7.5 + 4;
+
+  doc.setDrawColor(210, 222, 214);
+  doc.setLineWidth(0.5);
+  doc.line(16, y, 194, y);
+  y += 8;
+
+  let currentPage = 1;
+
+  for (const item of itemsToPrint) {
+    if (item.type === "heading") {
+      if (y > 248) {
+        doc.addPage();
+        currentPage++;
+        drawHeader(currentPage);
+        y = 44;
+      }
+      y += 4;
+      doc.setFont("helvetica", "bold");
+      doc.setFontSize(11);
+      doc.setTextColor(...forest);
+      const hLines = doc.splitTextToSize(item.text, 178);
+      doc.text(hLines, 16, y);
+      y += hLines.length * 6 + 3;
+    } else if (item.type === "highlight") {
+      if (y > 255) {
+        doc.addPage();
+        currentPage++;
+        drawHeader(currentPage);
+        y = 44;
+      }
+      doc.setFont("helvetica", "normal");
+      doc.setFontSize(9);
+      doc.setTextColor(30, 80, 50);
+      const hlLines = doc.splitTextToSize(item.text, 172);
+      doc.text(hlLines, 20, y);
+      y += hlLines.length * 5 + 2;
+    } else {
+      if (y > 255) {
+        doc.addPage();
+        currentPage++;
+        drawHeader(currentPage);
+        y = 44;
+      }
+      doc.setFont("helvetica", "normal");
+      doc.setFontSize(9);
+      doc.setTextColor(55, 65, 60);
+      const pLines = doc.splitTextToSize(item.text, 178);
+      doc.text(pLines, 16, y, { lineHeightFactor: 1.4 });
+      y += pLines.length * 4.8 + 4;
+    }
+  }
+
+  const totalPages = doc.getNumberOfPages();
+  for (let i = 1; i <= totalPages; i++) {
+    doc.setPage(i);
+    drawFooter(i, totalPages);
+  }
+
+  doc.save(`${title.replace(/[^a-z0-9]+/gi, "-").toLowerCase()}.pdf`);
 }
 
 async function imageData(url: string) {
@@ -217,6 +556,7 @@ export default function Home() {
   const [siteQuery, setSiteQuery] = useState("");
   const [resourceType, setResourceType] = useState("All");
   const [resources, setResources] = useState(starterResources);
+  const [selectedResource, setSelectedResource] = useState<Resource | null>(null);
   const [contentItems, setContentItems] = useState(starterContent);
   const [contentFilter, setContentFilter] = useState("All");
   const [selectedContent, setSelectedContent] = useState<ContentItem>(starterContent[0]);
@@ -359,7 +699,12 @@ export default function Home() {
       if (raw) {
         const state = JSON.parse(raw);
         if (active && state) {
-          if (state.resources) setResources(state.resources);
+          if (state.resources) {
+            setResources(state.resources.map((r: Resource) => {
+              const starter = starterResources.find((s) => s.id === r.id);
+              return starter ? { ...starter, ...r, highlights: starter.highlights, sections: starter.sections, pages: starter.pages, author: starter.author, category: starter.category } : r;
+            }));
+          }
           if (state.contentItems) setContentItems(state.contentItems);
           if (state.subscribers) setSubscribers(state.subscribers);
           if (state.cmsUsers) setCmsUsers(state.cmsUsers);
@@ -791,9 +1136,46 @@ export default function Home() {
       {view === "privacy" && <PolicyPage kind="privacy" />}
       {view === "terms" && <PolicyPage kind="terms" />}
 
-      {view === "resources" && <Page title="Public information centre" eyebrow="Open knowledge" intro="Search, filter and download reports, strategies, policies, learning briefs and public notices.">
-        <div className="filter-bar"><label><span>Search</span><input value={query} onChange={(e) => setQuery(e.target.value)} placeholder="Title, year, type or keyword" /></label><label><span>Document type</span><select value={resourceType} onChange={(e) => setResourceType(e.target.value)}><option>All</option><option>Report</option><option>Strategy</option><option>Brief</option><option>Policy</option></select></label><b>{filteredResources.length} result{filteredResources.length === 1 ? "" : "s"}</b></div>
-        <div className="publication-list">{filteredResources.map((r) => <article className="publication" key={r.id}><span className="file-icon">DOC</span><span className="publication-title"><small>{r.type} · {r.year}</small><b>{r.title}</b><em>{r.summary}</em></span><button onClick={() => downloadDemo(r.title, r.summary)}>Download ↓</button></article>)}{!filteredResources.length && <div className="empty">No public information matches those filters.</div>}</div>
+      {view === "resources" && <Page title="Public information centre" eyebrow="Open knowledge" intro="Search, inspect and download official institutional reports, strategic frameworks, policies and learning briefs published for transparent public review.">
+        <div className="filter-bar">
+          <label><span>Search public records</span><input value={query} onChange={(e) => setQuery(e.target.value)} placeholder="Title, year, sector, policy or keyword" /></label>
+          <label><span>Document classification</span><select value={resourceType} onChange={(e) => setResourceType(e.target.value)}><option>All</option><option>Report</option><option>Strategy</option><option>Brief</option><option>Policy</option></select></label>
+          <b>{filteredResources.length} document{filteredResources.length === 1 ? "" : "s"} available</b>
+        </div>
+        <div className="publication-list">
+          {filteredResources.map((r) => (
+            <article className="publication" key={r.id}>
+              <div className="file-icon-wrap" onClick={() => setSelectedResource(r)} style={{ cursor: "pointer" }} title="Click to view online">
+                <span className="file-icon">DOC</span>
+                <span className="doc-pages">{r.pages ? `${r.pages}p` : "PDF"}</span>
+              </div>
+              <div className="publication-title" onClick={() => setSelectedResource(r)} role="button" tabIndex={0} style={{ cursor: "pointer" }} title="Click to open online document reader">
+                <div className="publication-meta">
+                  <span className="pub-badge">{r.type}</span>
+                  <span className="pub-year">{r.year}</span>
+                  {r.pages && <span className="pub-pages">{r.pages} pages</span>}
+                  <span className="pub-access">Open Public Access</span>
+                </div>
+                <b>{r.title}</b>
+                <em>{r.summary}</em>
+                {r.highlights && r.highlights[0] && (
+                  <div className="pub-highlight-sneak">
+                    <span>★ Key takeaway: {r.highlights[0]}</span>
+                  </div>
+                )}
+              </div>
+              <div className="publication-actions">
+                <button type="button" className="button-view" onClick={() => setSelectedResource(r)}>
+                  <span>👁</span> View online ↗
+                </button>
+                <button type="button" className="button-download" onClick={() => downloadBrandedPdf(r.title, r, r.type)}>
+                  <span>PDF ↓</span>
+                </button>
+              </div>
+            </article>
+          ))}
+          {!filteredResources.length && <div className="empty">No public information matches those filters.</div>}
+        </div>
       </Page>}
 
       {view === "procurement" && <Page title="Procurement opportunities" eyebrow="Transparent opportunities" intro="RFQ-compliant tender publication and document downloads, enhanced by TOTAG's clearly identified optional electronic submission capability.">
@@ -851,6 +1233,14 @@ export default function Home() {
         <div className="callout"><b>Persistent evaluator environment:</b> CMS changes, bidder accounts, compliance documents, procurement notices, clarifications, proposal attachments, receipts and audit activity are stored in the platform database and object store. Refresh or sign back in to verify recovery. Final commissioning will replace demonstration identities and sample content with LACD-approved accounts, policies and records.</div>
       </Page></div></div>}
 
+      {selectedResource && (
+        <ResourceViewerModal
+          resource={selectedResource}
+          onClose={() => setSelectedResource(null)}
+          onDownload={(res) => void downloadBrandedPdf(res.title, res, res.type)}
+        />
+      )}
+
       <footer>
         <div className="footer-brand"><img src={asset("/lacd-logo.jpg")} alt="" /><div><b>Liberia Agency for<br />Community Development</b><p>Local agency. Shared progress.</p></div></div>
         <div><h3>Explore LACD</h3><button onClick={() => navigate("about")}>About LACD</button><button onClick={() => navigate("vision")}>Vision, Mission & Values</button><button onClick={() => navigate("strategy")}>Strategic Plan</button><button onClick={() => navigate("news")}>News & Updates</button><button onClick={() => navigate("stories")}>Success Stories</button><button onClick={() => navigate("careers")}>Careers</button><button onClick={() => navigate("events")}>Events Calendar</button><button onClick={() => navigate("gallery")}>Gallery</button><button onClick={() => navigate("partners")}>Partners & donors</button><button onClick={() => navigate("donate")}>♥ Donate & Support</button></div>
@@ -858,6 +1248,236 @@ export default function Home() {
         <div className="footer-bottom"><span>Interactive concept demonstration prepared by TOTAG IT Services for RFQ evaluation.</span><span>Contact: emmanuelpaye1978@gmail.com · lacommunitydevelopment1@gmail.com</span><span>Responsive · Accessible · Secure-by-design</span></div>
       </footer>
     </main>
+  );
+}
+
+function ResourceViewerModal({
+  resource,
+  onClose,
+  onDownload,
+}: {
+  resource: Resource;
+  onClose: () => void;
+  onDownload: (res: Resource) => void;
+}) {
+  const [activeTab, setActiveTab] = useState<"reader" | "highlights">("reader");
+  const [fontSize, setFontSize] = useState<"normal" | "large">("normal");
+
+  useEffect(() => {
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if (e.key === "Escape") onClose();
+    };
+    window.addEventListener("keydown", handleKeyDown);
+    return () => window.removeEventListener("keydown", handleKeyDown);
+  }, [onClose]);
+
+  useEffect(() => {
+    const prev = document.body.style.overflow;
+    document.body.style.overflow = "hidden";
+    return () => {
+      document.body.style.overflow = prev;
+    };
+  }, []);
+
+  return (
+    <div className="resource-modal-overlay" onClick={onClose} role="dialog" aria-modal="true" aria-labelledby="modal-doc-title">
+      <div className="resource-modal-container" onClick={(e) => e.stopPropagation()}>
+        <div className="resource-modal-topbar">
+          <div className="modal-brand">
+            <img src={asset("/lacd-logo.jpg")} alt="LACD" className="modal-brand-logo" />
+            <div className="modal-brand-text">
+              <span className="modal-agency">Liberia Agency for Community Development</span>
+              <span className="modal-sub">Public Information Centre · Official Document Viewer</span>
+            </div>
+          </div>
+          <div className="modal-top-actions">
+            <div className="view-mode-tabs">
+              <button
+                type="button"
+                className={`tab-btn ${activeTab === "reader" ? "active" : ""}`}
+                onClick={() => setActiveTab("reader")}
+              >
+                Document Reader
+              </button>
+              <button
+                type="button"
+                className={`tab-btn ${activeTab === "highlights" ? "active" : ""}`}
+                onClick={() => setActiveTab("highlights")}
+              >
+                Key Highlights & Data
+              </button>
+            </div>
+            <button
+              type="button"
+              className="modal-font-toggle"
+              onClick={() => setFontSize((s) => (s === "normal" ? "large" : "normal"))}
+              title="Toggle reading text size"
+            >
+              {fontSize === "normal" ? "A+" : "A-"}
+            </button>
+            <button
+              type="button"
+              className="modal-download-btn"
+              onClick={() => onDownload(resource)}
+            >
+              <span>Download PDF ↓</span>
+            </button>
+            <button
+              type="button"
+              className="modal-close-btn"
+              onClick={onClose}
+              aria-label="Close document viewer"
+            >
+              ✕
+            </button>
+          </div>
+        </div>
+
+        <div className="resource-modal-header">
+          <div className="doc-meta-pills">
+            <span className="doc-badge type-badge">{resource.type}</span>
+            <span className="doc-badge year-badge">{resource.year}</span>
+            {resource.pages && <span className="doc-badge pages-badge">{resource.pages} Pages</span>}
+            <span className="doc-badge category-badge">{resource.category || "Public Record"}</span>
+            <span className="doc-badge public-badge">Open Access · Public Domain</span>
+          </div>
+          <h1 id="modal-doc-title" className="modal-doc-title">{resource.title}</h1>
+          <p className="modal-doc-meta-line">
+            <b>Published by:</b> {resource.author || "Liberia Agency for Community Development"} · <b>Legal Entity:</b> Registered under Liberian Law (Est. 2013)
+          </p>
+          <p className="modal-doc-summary-lead">
+            {resource.summary}
+          </p>
+        </div>
+
+        <div className={`resource-modal-body ${fontSize === "large" ? "large-font" : ""}`}>
+          {activeTab === "highlights" ? (
+            <div className="modal-highlights-view">
+              <div className="highlights-hero">
+                <h3>Executive Highlights & Strategic Impact</h3>
+                <p>Key indicators, verified outcomes and strategic metrics extracted from this official publication.</p>
+              </div>
+              <div className="highlights-grid">
+                {resource.highlights?.map((h, i) => (
+                  <div key={i} className="highlight-metric-card">
+                    <span className="metric-index">0{i + 1}</span>
+                    <p className="metric-desc">{h}</p>
+                  </div>
+                ))}
+              </div>
+              <div className="highlights-cta">
+                <p>Read the full document with complete methodology, empirical data, and governance statements:</p>
+                <button type="button" className="button primary" onClick={() => setActiveTab("reader")}>
+                  Switch to Document Reader →
+                </button>
+              </div>
+            </div>
+          ) : (
+            <div className="modal-reader-layout">
+              {resource.sections && resource.sections.length > 0 && (
+                <aside className="modal-toc-sidebar">
+                  <h4>Table of Contents</h4>
+                  <nav>
+                    {resource.sections.map((sec, idx) => (
+                      <a key={idx} href={`#doc-section-${idx}`} className="toc-link">
+                        <span className="toc-num">{idx + 1}</span>
+                        <span className="toc-text">{sec.heading}</span>
+                      </a>
+                    ))}
+                  </nav>
+                  <div className="sidebar-cert-box">
+                    <div className="cert-badge">✓ Official LACD Publication</div>
+                    <p>Verified public information published in accordance with the LACD Transparency & Community Accountability Charter.</p>
+                  </div>
+                </aside>
+              )}
+
+              <article className="modal-doc-paper">
+                <div className="paper-header-band">
+                  <div className="paper-brand">
+                    <img src={asset("/lacd-logo.jpg")} alt="LACD Seal" />
+                    <div>
+                      <strong>LIBERIA AGENCY FOR COMMUNITY DEVELOPMENT</strong>
+                      <small>Chugbor Road, Old Road, Monrovia, Liberia · Established 2013</small>
+                    </div>
+                  </div>
+                  <div className="paper-seal">
+                    <span>OFFICIAL</span>
+                    <b>PUBLIC RECORD</b>
+                  </div>
+                </div>
+
+                <div className="paper-intro-box">
+                  <span className="intro-label">Executive Summary & Notice</span>
+                  <p>{resource.summary}</p>
+                </div>
+
+                {resource.highlights && (
+                  <div className="paper-highlights-inline">
+                    <strong>Key Document Highlights:</strong>
+                    <ul>
+                      {resource.highlights.map((h, idx) => (
+                        <li key={idx}>{h}</li>
+                      ))}
+                    </ul>
+                  </div>
+                )}
+
+                <div className="paper-sections">
+                  {resource.sections ? (
+                    resource.sections.map((sec, idx) => (
+                      <section key={idx} id={`doc-section-${idx}`} className="paper-section">
+                        <h3>{sec.heading}</h3>
+                        {sec.content.map((p, pIdx) => (
+                          <p key={pIdx}>{p}</p>
+                        ))}
+                      </section>
+                    ))
+                  ) : (
+                    resource.content ? (
+                      resource.content.map((p, pIdx) => <p key={pIdx}>{p}</p>)
+                    ) : (
+                      <p>{resource.summary}</p>
+                    )
+                  )}
+                </div>
+
+                <div className="paper-footer-verification">
+                  <div className="verification-details">
+                    <b>Digital Document Verification</b>
+                    <p>Liberia Agency for Community Development (LACD) · Open Knowledge & Community Accountability Repository.</p>
+                    <small>Document ID: LACD-PUB-{resource.year}-{String(resource.id).padStart(3, "0")} · Published for unrestricted public review.</small>
+                  </div>
+                  <button
+                    type="button"
+                    className="button primary paper-download-btn"
+                    onClick={() => onDownload(resource)}
+                  >
+                    Download Complete PDF ↓
+                  </button>
+                </div>
+              </article>
+            </div>
+          )}
+        </div>
+
+        <div className="resource-modal-footer">
+          <span>Viewing: <b>{resource.title}</b> ({resource.type} · {resource.year})</span>
+          <div className="footer-actions">
+            <button type="button" className="text-btn" onClick={onClose}>
+              Close viewer
+            </button>
+            <button
+              type="button"
+              className="button primary footer-download-btn"
+              onClick={() => onDownload(resource)}
+            >
+              Download PDF ↓
+            </button>
+          </div>
+        </div>
+      </div>
+    </div>
   );
 }
 
